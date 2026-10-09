@@ -1,0 +1,1 @@
+ALTER TABLE "config" ALTER COLUMN "value" DROP NOT NULL;
