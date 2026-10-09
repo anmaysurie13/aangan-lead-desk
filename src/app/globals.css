@@ -16,9 +16,9 @@
   --color-danger: #ff6b5e; /* Coral */
   --color-paper: #ffffff;
 
-  --font-display: var(--font-archivo-black), "Archivo Black", sans-serif;
-  --font-sans: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
-  --font-mono: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
+  --font-display: "Archivo Black", sans-serif;
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
 
   --shadow-brutal-sm: 4px 4px 0px 0px #111111;
   --shadow-brutal-md: 6px 6px 0px 0px #111111;
@@ -42,14 +42,14 @@
       linear-gradient(to bottom, rgb(17 17 17 / 0.05) 1px, transparent 1px);
     background-size: 24px 24px;
     color: var(--color-ink);
-    font-family: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+    font-family: "Space Grotesk", system-ui, sans-serif;
     font-weight: 500;
   }
   h1,
   h2,
   h3,
   .heading {
-    font-family: var(--font-archivo-black), "Archivo Black", sans-serif;
+    font-family: "Archivo Black", sans-serif;
     text-transform: uppercase;
     letter-spacing: -0.02em;
     line-height: 1.05;

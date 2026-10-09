@@ -1,14 +1,15 @@
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { availableTimes, createSingleUseLink, tagBookingUrl } from "@/lib/calendly/client";
-import { sendToCaller } from "@/lib/messaging/send";
+import { isEmail, sendEmail } from "@/lib/messaging/send";
 
 /**
  * Qualified lead → consultation booking (Phase 4).
  * 1. Assign a designer (round-robin: active designer with a Calendly event type, least recently assigned).
- * 2. Read the designer's next 2 open consultation slots from Calendly (shown in the SMS and the designer brief).
+ * 2. Read the designer's next 2 open consultation slots from Calendly (shown in both emails).
  * 3. Create a single-use Calendly link, tagged utm_content=<booking id> so invitee.created maps back here.
- * 4. Send it to the caller by SMS/WhatsApp (provider configured in Phase 4/5; if none, the link still goes in the designer brief).
+ * 4. Email the link to the caller (address spelled + confirmed on the call) and email the designer the brief + the same link.
+ *    No caller email → the designer email says so and the designer shares the link by phone.
  * Never throws: failures are stored on the booking row + dead_letters so scoring is unaffected.
  */
 export async function createBookingForEnquiry(enquiryId: string): Promise<{ status: string; bookingId?: string }> {
@@ -47,18 +48,39 @@ export async function createBookingForEnquiry(enquiryId: string): Promise<{ stat
       .where(eq(schema.bookings.id, booking.id));
 
     const phone = await callerPhone(enquiryId);
-    if (phone) {
-      const sent = await sendToCaller({
-        enquiryId,
-        to: phone,
-        kind: "scheduling_link",
+    let status = "link_created";
+    if (isEmail(enq.callerEmail)) {
+      const sent = await sendEmail({
+        to: enq.callerEmail,
+        subject: "Book your Aangan Studio design consultation",
         text: schedulingMessage({ name: enq.callerName, designer: designer.name, slots, link }),
+        kind: "scheduling_link",
+        enquiryId,
+        callerFacing: true,
       });
       if (sent.delivered) {
-        await d.update(schema.bookings).set({ status: "link_sent", linkSentAt: new Date(), updatedAt: new Date() }).where(eq(schema.bookings.id, booking.id));
-        return { status: "link_sent", bookingId: booking.id };
+        status = "link_sent";
+        await d.update(schema.bookings).set({ status, linkSentAt: new Date(), updatedAt: new Date() }).where(eq(schema.bookings.id, booking.id));
       }
     }
+    if (designer.email) {
+      const [qr] = await d
+        .select()
+        .from(schema.qualificationResults)
+        .where(eq(schema.qualificationResults.enquiryId, enquiryId))
+        .orderBy(desc(schema.qualificationResults.createdAt))
+        .limit(1);
+      await sendEmail({
+        to: designer.email,
+        subject: `New ${enq.status === "QUALIFIED_WITH_NOTE" ? "lead (with note)" : "lead"}: ${enq.callerName ?? "caller"}, ${enq.locality ?? "locality unknown"}`,
+        text: designerBrief({ enq, phone, link, slots, linkEmailed: status === "link_sent", summary: qr?.summary3Lines, brief: qr?.briefForDesigner, openQuestions: (qr?.openQuestions as string[] | undefined) ?? [] }),
+        kind: "hot_lead",
+        enquiryId,
+        recipientDesignerId: designer.id,
+      });
+      await d.update(schema.enquiries).set({ briefSentAt: new Date() }).where(eq(schema.enquiries.id, enquiryId));
+    }
+    if (status === "link_sent") return { status, bookingId: booking.id };
     return { status: "link_created", bookingId: booking.id };
   } catch (e) {
     await fail(booking.id, e instanceof Error ? e.message : String(e));
@@ -101,4 +123,41 @@ export function schedulingMessage(m: { name: string | null; designer: string; sl
   const hi = m.name ? `Hi ${m.name.split(" ")[0]}, ` : "Hi, ";
   const slotText = m.slots.length ? ` Next open times: ${m.slots.map(formatIst).join(" or ")}.` : "";
   return `${hi}thank you for calling Aangan Studio. Book your design consultation with ${m.designer}: ${m.link}${slotText}`;
+}
+
+type EnquiryRow = typeof schema.enquiries.$inferSelect;
+const v = (x: unknown) => (x === null || x === undefined || x === "" ? "unknown" : String(x));
+
+/** Check 04: every field present or explicitly "unknown". Internal email, so it may mention a volunteered budget but never a quote. */
+export function designerBrief(b: {
+  enq: EnquiryRow;
+  phone: string | null;
+  link: string;
+  slots: string[];
+  linkEmailed: boolean;
+  summary?: string;
+  brief?: string;
+  openQuestions: string[];
+}) {
+  const e = b.enq;
+  return [
+    `Who: ${v(e.callerName)} · ${v(b.phone)} · ${v(e.callerEmail)}`,
+    `Where: ${v(e.locality)}`,
+    `Property: ${v(e.propertyType)} · ${v(e.bhk)} · ${e.carpetAreaSqft ? `${e.carpetAreaSqft} sq ft carpet` : "area unknown"} · ${v(e.ownership)}`,
+    `Scope: ${v(e.scope)} · current state: ${v(e.currentState)}`,
+    `Timeline: ${v(e.timelineText)}${e.timelineWeeks ? ` (~${e.timelineWeeks} weeks)` : ""}`,
+    `Decision-maker: ${v(e.decisionMakerStatus)}`,
+    `Referral: ${v(e.referralSource)} · language: ${v(e.language)} · site visit wanted: ${v(e.siteVisitRequested)}`,
+    `Status: ${e.status}`,
+    "",
+    `Summary:\n${v(b.summary)}`,
+    "",
+    `Open questions:\n${b.openQuestions.length ? b.openQuestions.map((q) => `- ${q}`).join("\n") : "- none"}`,
+    "",
+    `Booking link (single-use): ${b.link}`,
+    `Next open slots: ${b.slots.length ? b.slots.map(formatIst).join(" | ") : "none in the next 14 days"}`,
+    b.linkEmailed ? "The link has been emailed to the caller." : "The caller has NOT received the link (no confirmed email). Please call them and share it.",
+    "",
+    `Full brief:\n${v(b.brief)}`,
+  ].join("\n");
 }

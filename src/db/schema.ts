@@ -107,6 +107,7 @@ export const enquiries = pgTable(
     // Captured fields (null = unknown; brief renders "unknown" explicitly)
     callerName: text("caller_name"),
     phoneConfirmed: boolean("phone_confirmed"),
+    callerEmail: text("caller_email"), // spelled out + read back on the call; booking link is emailed here
     locality: text("locality"),
     propertyType: text("property_type"),
     bhk: text("bhk"),

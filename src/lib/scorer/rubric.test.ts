@@ -17,7 +17,7 @@ function verdict(over: Partial<Record<"real_project" | "service_area" | "timelin
     outcome: "QUALIFIED",
     review_reason: null,
     captured: {
-      caller_name: null, locality: null, property_type: null, bhk: "3BHK", carpet_area_sqft: null, scope_rooms: null,
+      caller_name: null, caller_email: null, locality: null, property_type: null, bhk: "3BHK", carpet_area_sqft: null, scope_rooms: null,
       current_state: null, timeline_text: null, timeline_weeks: 12, ownership: null, decision_maker_status: null,
       referral_source: "a friend referred us", language: "English", site_visit_requested: null, volunteered_budget: null,
       existing_designer_name: null, project_location: null, issue: null, decline_reason: null,

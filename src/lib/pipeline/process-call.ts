@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { getConfig } from "@/lib/config";
 import { createBookingForEnquiry } from "@/lib/booking/booking";
+import { sendEmail } from "@/lib/messaging/send";
 import { scoreCall, ScorerError } from "@/lib/scorer/score";
 import { parseTranscript } from "@/lib/transcript";
 import type { Verdict } from "@/lib/scorer/schema";
@@ -106,6 +107,7 @@ export async function processCall(callRowId: string): Promise<{ status: string; 
         declineReason: v.outcome === "DECLINED" ? cap.decline_reason ?? v.rule_trace.join("; ") : null,
         ...ownerFor(v.outcome),
         callerName: cap.caller_name,
+        callerEmail: cap.caller_email,
         locality: cap.locality,
         propertyType: cap.property_type,
         bhk: cap.bhk,
@@ -196,9 +198,40 @@ async function recordGeminiCost(callId: string, usage: { inputTokens: number; ou
 
 /** Phase 5 hook: Telegram brief / urgent alert / breach alert / digest. Until then, nothing is sent. */
 async function routeOutcome(input: { enquiryId: string; callId: string; verdict: Verdict; pricingBreach: boolean }) {
-  // Phase 4: qualified leads get a designer + single-use Calendly link. Phase 5 adds Telegram/email alerts here.
-  if (input.verdict.outcome === "QUALIFIED" || input.verdict.outcome === "QUALIFIED_WITH_NOTE") {
+  // Email is the only channel (Nikhil, 2026-10-09: no Telegram/SMS).
+  const v = input.verdict;
+  const nikhil = process.env.NIKHIL_EMAIL;
+  if (v.outcome === "QUALIFIED" || v.outcome === "QUALIFIED_WITH_NOTE") {
     await createBookingForEnquiry(input.enquiryId);
+  }
+  if (v.outcome === "ESCALATED" && nikhil) {
+    const c = v.captured;
+    await sendEmail({
+      to: nikhil,
+      subject: `URGENT: existing client needs a senior callback (${c.caller_name ?? "caller"})`,
+      text: [
+        `Caller: ${c.caller_name ?? "unknown"} · designer: ${c.existing_designer_name ?? "unknown"} · project: ${c.project_location ?? c.locality ?? "unknown"}`,
+        `Issue: ${c.issue ?? "unknown"}`,
+        `Frustrated: ${v.frustration_flag ? "yes" : "no"}`,
+        "",
+        v.summary_3_lines,
+        "",
+        "The agent promised a callback from a senior person.",
+      ].join("\n"),
+      kind: "urgent_escalation",
+      enquiryId: input.enquiryId,
+      callId: input.callId,
+    });
+  }
+  if (input.pricingBreach && nikhil) {
+    await sendEmail({
+      to: nikhil,
+      subject: "PRICING BREACH: the agent stated a price on a call",
+      text: `The pricing guardrail flagged an agent turn on call ${input.callId} (enquiry ${input.enquiryId}). Review the transcript and the agent prompt.`,
+      kind: "pricing_breach",
+      enquiryId: input.enquiryId,
+      callId: input.callId,
+    });
   }
 }
 
