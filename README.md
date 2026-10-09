@@ -4,7 +4,7 @@ Inbound phone enquiry system for **Aangan Studio**, an interior design studio in
 
 Every call is answered within 5 seconds, day or night. Each call is qualified against Nikhil's rubric, and qualified leads reach a designer on Telegram within 60 seconds of hang-up with the full brief. Nikhil gets one dashboard covering what the system generates and what it costs.
 
-> **Status:** Phase 3 done in code and verified with simulated calls. Waiting on: webhook secret pasted in Vaani, and a phone number. Next: Phase 4 (Calendly). See [Phases](#phases).
+> **Status:** Phase 4 code done (Calendly single-use links, booking webhook). Waiting on: Calendly token + designer mapping, SMS/WhatsApp provider, Vaani webhook URL with token. See [Phases](#phases).
 
 ---
 
@@ -173,6 +173,36 @@ The provider is **Vaani AI Research**. Docs are at [docs.vaanivoice.ai](https://
 - `GET /api/call-history` returns **500 "Invalid client_id format"** for this workspace. Enrichment from call history is best effort; failures go to `dead_letters`, source `vaani_enrich`. The caller number comes from `call_started.phone_number` or the "Send all call details" payload.
 - The agent list shows `published: false` while the agent status is `running`. This needs confirming with a real call.
 
+**Webhook auth, as it really behaves.** Vaani's agent-webhook "Test Connectivity" ping arrives **without** any signature headers, only `x-webhook-event`. So the endpoint works as follows:
+- A request **with** signature headers must carry a valid HMAC.
+- A request **without** them must carry `?token=VAANI_WEBHOOK_TOKEN`.
+
+Paste the full URL from the git-ignored `vaani-webhook-url.local.txt` into Vaani's webhook. `webhook_test` pings get a 200 and are logged.
+
+### Calendly booking (Phase 4)
+
+| Decision | Why (developer.calendly.com, 2026-10-09) |
+|---|---|
+| **Single-use scheduling link** (`POST /scheduling_links`), sent to the caller by SMS/WhatsApp | Direct booking (`POST /invitees`, "Scheduling API") needs a **paid plan** and the invitee's **email**, and an email spelled out over the phone is unreliable. The brief's fallback applies |
+| Show the **next 2 open slots** (`GET /event_type_available_times`) in the SMS and the designer brief | This gives the caller and designer concrete options without fake promises. The voice agent doesn't quote slots in the call, because live slot lookup during the call would need a Vaani "Tools & Actions" HTTP tool, which is not in Vaani's API docs |
+| Link tagged `utm_content=<booking id>` | `invitee.created` carries `tracking.utm_content`, so the booking maps back exactly. The fallback is the only open booking for that event type; anything else goes to `dead_letters` |
+| Designer assignment: round-robin | Active designers with a Calendly event type, least recently assigned first (open question 7) |
+
+Flow:
+1. A QUALIFIED or QUALIFIED_WITH_NOTE call triggers `createBookingForEnquiry`.
+2. That creates a `bookings` row (`link_created`, then `link_sent` once SMS is configured).
+3. Calendly `invitee.created` moves the enquiry to **BOOKED** with `booked_at` and the slot. `invitee.canceled` moves it back to QUALIFIED.
+
+Setup:
+
+```bash
+npm run calendly -- --check        # token owner + event types (copy the consultation event type URI)
+npm run calendly -- --designers    # load designers.local.json (format: designers.example.json)
+npm run calendly -- --webhook      # signed subscription → /api/webhooks/calendly
+```
+
+Token scopes: `users:read event_types:read availability:read scheduling_links:write scheduled_events:read webhooks:read webhooks:write`.
+
 **Observed costs** (from the dashboard, 2026-10-09; not yet entered as rate cards):
 - Agent: **₹5.60/min (est.)**. Billing is dynamic, "per minute, from active LLM + TTS + STT".
 - Wallet: ₹100 prepaid.
@@ -250,7 +280,7 @@ These are conflicts or gaps in the source documents. The system makes each one *
 | 1 | Knowledge loader, prompt generator, Gemini scorer (zod) | ✅ Gemini key, model IDs |
 | 2 | Evals: 19 September transcripts + red-team pricing tests | ✅ all pass |
 | 3 | Vaani webhook, signature, agent config push | ✅ built. Pending: webhook secret pasted in Vaani, phone number decision |
-| 4 | Calendly availability + booking/link flow | Calendly token, designer mapping, SMS/WhatsApp sender |
+| 4 | Calendly availability + booking/link flow | ✅ built. Pending: Calendly token, designer mapping, SMS/WhatsApp sender |
 | 5 | Telegram bot (brief, claim, reassign, rating, SLA) + email digest | Bot token, chat IDs, email provider + key |
 | 6 | Dashboard, /health, cost tracking | Rate cards, dashboard auth choice |
 | 7 | Deploy, 5 end-to-end test calls, launch checklist | — |
