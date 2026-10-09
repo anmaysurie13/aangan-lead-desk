@@ -14,12 +14,14 @@
         "test": "vitest run",
         "knowledge": "tsx scripts/build-knowledge.ts",
         "predev": "npm run knowledge",
-        "prebuild": "npm run knowledge",
+        "prebuild": "npm run knowledge && tsx scripts/vaani-sync.ts --if-production",
         "pretest": "npm run knowledge",
         "pretypecheck": "npm run knowledge",
         "score": "tsx scripts/score.ts",
         "evals": "tsx evals/run.ts",
-        "fixtures": "tsx scripts/extract-fixtures.ts"
+        "fixtures": "tsx scripts/extract-fixtures.ts",
+        "vaani:sync": "tsx scripts/vaani-sync.ts",
+        "simulate": "tsx scripts/simulate-vaani-call.ts"
     },
     "dependencies": {
         "@google/genai": "^2.28.0",

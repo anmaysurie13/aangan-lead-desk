@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Seeds non-price config defaults. Rate cards are inserted as NULL on purpose:
  * Nikhil enters real prices; the system never guesses them.
  * Run: npm run db:seed
@@ -23,8 +23,8 @@ const defaults: { key: string; value: unknown; description: string }[] = [
   { key: "avg_project_value_inr", value: { low: 800000, high: 1400000 }, description: "From case brief: avg project value ₹8–14L. Used only for internal pipeline value, never spoken to callers." },
   { key: "baseline_unanswered_48h_pct", value: 48, description: "Check 01 pre-launch baseline (Nikhil's manual pull)." },
   { key: "digest_hour_ist", value: 20, description: "Daily digest send hour (IST)." },
-  { key: "rate_card_vaani_per_minute_inr", value: null, description: "ENTER: Vaani per-minute price (INR)." },
-  { key: "rate_card_claude", value: null, description: "ENTER: per-model {input_per_mtok_inr, output_per_mtok_inr}." },
+  { key: "rate_card_vaani_per_minute_inr", value: null, description: "ENTER: Vaani per-minute price (INR). Vaani bills dynamically per minute; per-call call_cost from Vaani is used when available." },
+  { key: "rate_card_gemini", value: null, description: "ENTER: Gemini {input_per_mtok_inr, output_per_mtok_inr} (thinking tokens bill as output)." },
   { key: "rate_card_telegram_per_message_inr", value: null, description: "ENTER: Telegram cost per message (INR)." },
   { key: "rate_card_sms_per_message_inr", value: null, description: "ENTER: SMS/WhatsApp cost per message (INR)." },
   { key: "fixed_monthly_inr", value: null, description: "ENTER: {vercel, neon, email} fixed monthly costs (INR)." },

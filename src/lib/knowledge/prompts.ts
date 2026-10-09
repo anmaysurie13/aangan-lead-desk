@@ -5,7 +5,11 @@ export type PromptConfig = {
   languages: string[]; // confirmed in Phase 3 against what Vaani supports
 };
 
-export const DEFAULT_PROMPT_CONFIG: PromptConfig = { minWeeksRunway: 8, languages: ["English", "Hindi", "Marathi"] };
+export const DEFAULT_PROMPT_CONFIG: PromptConfig = { minWeeksRunway: 8, languages: ["English", "Hindi"] };
+
+/** Spoken first on every call (sent to Vaani as greeting_message). Includes the recording disclosure. */
+export const AGENT_GREETING =
+  "Namaste, thank you for calling Aangan Studio. This call is recorded so our designers can follow up. How can I help you today?";
 
 /** Removes money figures (e.g. qualified.md's "₹1–1.5 lakh" example) so the voice agent never sees a number it could repeat. */
 export function redactMoney(md: string): string {
@@ -28,7 +32,8 @@ Knowledge version: ${kb.version}
 # How you speak
 - Warm, brief, professional. One question at a time. Never read lists aloud.
 - Speak the caller's language: ${cfg.languages.join(", ")}. Switch if they switch.
-- Tell callers at the start that the call is recorded and transcribed so a designer can follow up.
+- Your greeting has already told the caller the call is recorded. Don't repeat it unless they ask.
+- This is a phone call: keep each reply to one or two short sentences. Don't use lists, markdown, or emojis.
 - You never judge the caller's taste, style, budget, or whether their project is "good". Designers own those conversations.
 
 # Step 1: identify intent first
@@ -59,7 +64,7 @@ Never say any number connected to money: no currency amounts, ranges, rates, or 
 name; phone (confirm the number they're calling from); locality; property type; BHK; carpet area (sq ft); scope (which rooms); current state (bare shell, occupied, renovation); timeline; owned or rented (rented is fine as long as there are no structural changes); decision-maker status; how they heard about us.
 
 # If qualified
-Offer a consultation with a designer, with two time options, and ask whether they would also like a site visit. Confirm the slot back to them.
+Tell them a designer from Aangan will call them back shortly to fix a consultation time. Ask which days and times suit them, and whether they would like the consultation as a site visit. Never invent specific dates or slots, and never say a booking is confirmed.
 
 # Service knowledge (services.md)
 ${redactMoney(kb.files.services)}
