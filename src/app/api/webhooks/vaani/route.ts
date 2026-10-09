@@ -83,6 +83,14 @@ export async function POST(req: NextRequest) {
     patch.recordingUrl = data.recording_url ?? null;
     if (typeof data.call_duration === "number") patch.durationSec = Math.round(data.call_duration / 1000);
     patch.endedAt = existing?.endedAt ?? (event.timestamp ? new Date(event.timestamp) : now);
+    // With "Send all call details" enabled, Vaani may include call-record fields. Read only the names
+    // documented for call records (api-reference/call-history); ignore anything else.
+    const rec = data as Record<string, unknown>;
+    const inbound = /inbound|incoming/i.test(String(rec.direction ?? rec.call_type ?? "inbound"));
+    const caller = inbound ? rec.from_number : rec.to_number;
+    if (!existing?.fromNumber && typeof caller === "string") patch.fromNumber = caller;
+    if (!existing?.answeredAt && typeof rec.user_picked_up_at === "string") patch.answeredAt = new Date(rec.user_picked_up_at);
+    if (typeof rec.End_time === "string") patch.endedAt = new Date(rec.End_time);
   }
 
   const [row] = await d

@@ -38,11 +38,9 @@ async function main() {
       system_prompt: buildAgentSystemPrompt(kb, { minWeeksRunway, languages: ["English", "Hindi"] }),
       greeting_message: { agent_message: AGENT_GREETING, interruptible: true, let_user_speak_first: false },
     },
-    senses_capabilities: {
-      language: "en",
-      auto_detect: true, // English + Hindi callers; documented flag "Enable automatic language detection"
-      ears: { stt: { primary: { keywords: ["Aangan", ...kb.parsed.inAreaLocalities, ...kb.parsed.outOfAreaPlaces] } } },
-    },
+    // senses_capabilities (language, STT, TTS) is owned by the Vaani dashboard: Hindi primary + English fallback,
+    // set 2026-10-09. Observed: PATCHing ANY senses field (even STT keywords) resets STT/TTS language to "en",
+    // so this script never sends senses_capabilities. STT keywords (localities) were set once on 2026-10-09.
     metadata: { knowledge_version: kb.version, managed_by: "aangan-lead-desk" },
   };
 
