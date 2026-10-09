@@ -51,3 +51,6 @@ src/generated/
 
 # eval run dumps (LATEST-*.md are committed)
 evals/results/*.json
+
+# local helper with the full webhook URL (contains a secret token)
+*.local.txt

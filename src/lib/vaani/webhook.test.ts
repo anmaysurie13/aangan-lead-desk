@@ -22,12 +22,13 @@ describe("verifyVaaniRequest", () => {
   it("rejects a wrong secret", () => {
     expect(verifyVaaniRequest({ rawBody: body, signature: sign(now, body, "other"), timestamp: String(now), urlToken: null, secret, nowSec: now }).ok).toBe(false);
   });
-  it("requires the signature when a secret is configured, even if a token is present", () => {
-    expect(verifyVaaniRequest({ rawBody: body, signature: null, timestamp: null, urlToken: "tok", secret, token: "tok", nowSec: now }).ok).toBe(false);
+  it("a bad signature is never rescued by a valid token", () => {
+    expect(verifyVaaniRequest({ rawBody: body, signature: sign(now, body, "other"), timestamp: String(now), urlToken: "tok", secret, token: "tok", nowSec: now }).ok).toBe(false);
   });
-  it("falls back to URL token when no secret is configured", () => {
-    expect(verifyVaaniRequest({ rawBody: body, signature: null, timestamp: null, urlToken: "tok", token: "tok" }).ok).toBe(true);
-    expect(verifyVaaniRequest({ rawBody: body, signature: null, timestamp: null, urlToken: "nope", token: "tok" }).ok).toBe(false);
+  it("unsigned requests (as Vaani's agent webhook sends) need the URL token", () => {
+    expect(verifyVaaniRequest({ rawBody: body, signature: null, timestamp: null, urlToken: "tok", secret, token: "tok" })).toEqual({ ok: true, method: "token" });
+    expect(verifyVaaniRequest({ rawBody: body, signature: null, timestamp: null, urlToken: "nope", secret, token: "tok" }).ok).toBe(false);
+    expect(verifyVaaniRequest({ rawBody: body, signature: null, timestamp: null, urlToken: null, secret, token: "tok" }).ok).toBe(false);
   });
   it("rejects everything when nothing is configured", () => {
     expect(verifyVaaniRequest({ rawBody: body, signature: null, timestamp: null, urlToken: null }).ok).toBe(false);

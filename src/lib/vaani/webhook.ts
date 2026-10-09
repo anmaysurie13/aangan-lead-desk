@@ -6,9 +6,10 @@ import { z } from "zod";
  * Vaani documents HMAC-SHA256 signing (docs.vaanivoice.ai/api-reference/campaigns/webhooks):
  *   X-Vaani-Signature: sha256=<hex HMAC(secret, `${timestamp}.${rawBody}`)>
  *   X-Vaani-Timestamp: <unix seconds>, rejected if more than 5 minutes off.
- * The agent webhook guide does not say whether agent (non-campaign) webhooks are signed. So:
- *   - If VAANI_WEBHOOK_SECRET is set, a valid signature is REQUIRED.
- *   - Otherwise a secret token in the URL (?token=VAANI_WEBHOOK_TOKEN) is required.
+ * Observed 2026-10-09: Vaani's agent-webhook "Test Connectivity" request carried NO signature headers
+ * (only x-webhook-event), even with a signing secret configured. So:
+ *   - If signature headers are present (and a secret is set), the HMAC MUST be valid. A bad signature is never rescued by a token.
+ *   - If they are absent, the secret URL token (?token=VAANI_WEBHOOK_TOKEN) must match.
  * Unauthenticated requests are always rejected.
  */
 export type AuthResult = { ok: true; method: "hmac" | "token" } | { ok: false; reason: string };
@@ -23,8 +24,10 @@ export function verifyVaaniRequest(opts: {
   nowSec?: number;
 }): AuthResult {
   const now = opts.nowSec ?? Math.floor(Date.now() / 1000);
-  if (opts.secret) {
-    if (!opts.signature || !opts.timestamp) return { ok: false, reason: "missing signature headers" };
+  const signed = Boolean(opts.signature || opts.timestamp);
+  if (signed) {
+    if (!opts.secret) return { ok: false, reason: "signed request but VAANI_WEBHOOK_SECRET not set" };
+    if (!opts.signature || !opts.timestamp) return { ok: false, reason: "incomplete signature headers" };
     const ts = Number(opts.timestamp);
     if (!Number.isFinite(ts) || Math.abs(now - ts) > 300) return { ok: false, reason: "stale or invalid timestamp" };
     const expected = "sha256=" + createHmac("sha256", opts.secret).update(`${opts.timestamp}.${opts.rawBody}`).digest("hex");
@@ -37,7 +40,7 @@ export function verifyVaaniRequest(opts: {
     const b = Buffer.from(opts.urlToken ?? "");
     return a.length === b.length && timingSafeEqual(a, b) ? { ok: true, method: "token" } : { ok: false, reason: "bad token" };
   }
-  return { ok: false, reason: "webhook auth not configured (set VAANI_WEBHOOK_SECRET or VAANI_WEBHOOK_TOKEN)" };
+  return { ok: false, reason: "unsigned request and VAANI_WEBHOOK_TOKEN not set" };
 }
 
 /** Lenient schemas matching the documented payloads (docs.vaanivoice.ai/guides/webhook-setup). Unknown fields pass through. */

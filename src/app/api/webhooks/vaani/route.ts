@@ -49,6 +49,11 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (event?.event === "webhook_test") {
+    // Vaani dashboard "Test Connectivity" ping. Logged so /health shows the last contact.
+    await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: "webhook_test", signatureValid: true });
+    return NextResponse.json({ status: "ok" });
+  }
   if (!event || !vaaniCallId) {
     await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: null, signatureValid: true });
     await d.insert(schema.deadLetters).values({ source: "vaani_webhook", payload: safeJson(rawBody), error: "unparseable payload" });
