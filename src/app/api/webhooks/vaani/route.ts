@@ -40,6 +40,13 @@ export async function POST(req: NextRequest) {
 
   if (!auth.ok) {
     await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: vaaniCallId, signatureValid: false });
+    // Debug aid for signature-format mismatches: header NAMES only (never values) + reason.
+    await d.insert(schema.deadLetters).values({
+      source: "vaani_auth",
+      externalId: vaaniCallId,
+      payload: { headerNames: [...req.headers.keys()], event: event?.event ?? null },
+      error: auth.reason,
+    });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!event || !vaaniCallId) {
