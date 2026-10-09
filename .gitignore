@@ -45,3 +45,6 @@ next-env.d.ts
 .vercel
 .env*
 !.env.example
+
+# generated at build time from /knowledge
+src/generated/

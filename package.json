@@ -11,10 +11,16 @@
         "db:migrate": "drizzle-kit migrate",
         "db:seed": "tsx src/db/seed.ts",
         "typecheck": "tsc --noEmit",
-        "test": "vitest run"
+        "test": "vitest run",
+        "knowledge": "tsx scripts/build-knowledge.ts",
+        "predev": "npm run knowledge",
+        "prebuild": "npm run knowledge",
+        "pretest": "npm run knowledge",
+        "pretypecheck": "npm run knowledge",
+        "score": "tsx scripts/score.ts"
     },
     "dependencies": {
-        "@anthropic-ai/sdk": "^0.132.1",
+        "@google/genai": "^2.28.0",
         "@neondatabase/serverless": "^1.2.0",
         "drizzle-orm": "^0.45.4",
         "next": "15.5.27",
@@ -32,6 +38,7 @@
         "drizzle-kit": "^0.31.11",
         "eslint": "^9",
         "eslint-config-next": "15.5.27",
+        "pdf-parse": "^1.1.1",
         "tailwindcss": "^4",
         "tsx": "^4.23.15",
         "typescript": "^5",
