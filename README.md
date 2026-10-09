@@ -4,7 +4,7 @@ Inbound phone enquiry system for **Aangan Studio**, an interior design studio in
 
 Every call is answered within 5 seconds, day or night. Each call is qualified against Nikhil's rubric, and qualified leads reach a designer on Telegram within 60 seconds of hang-up with the full brief. Nikhil gets one dashboard covering what the system generates and what it costs.
 
-> **Status:** Phase 2 done. Evals: 19/19 September calls (57/57 runs) and 4/4 red-team pass. Next: Phase 3 (Vaani). See [Phases](#phases).
+> **Status:** Phase 3 done in code and verified with simulated calls. Waiting on: webhook secret pasted in Vaani, and a phone number. Next: Phase 4 (Calendly). See [Phases](#phases).
 
 ---
 
@@ -142,6 +142,42 @@ npm run evals -- --only T07,T16
 
 **Pricing guardrail on the September calls.** In T10 the human front desk repeated the caller's own "1 to 1.5 lakh". The guardrail flags it as `PRICING_BREACH`. This is correct under the strict rule, and the outcome is still DECLINED.
 
+### Vaani integration (Phase 3)
+
+The provider is **Vaani AI Research**. Docs are at [docs.vaanivoice.ai](https://docs.vaanivoice.ai), the dashboard at [app.vaanivoice.ai](https://app.vaanivoice.ai), and the API at `https://api.vaanivoice.ai` with the `X-API-Key` header. Every endpoint and field used here is taken from those docs.
+
+| Piece | Where |
+|---|---|
+| Agent | `aangan-front-desk` (`VAANI_AGENT_ID`), created by `npm run vaani:sync` |
+| Agent sync | `scripts/vaani-sync.ts`. It PATCHes the persona with the generated system prompt, the greeting (with the recording disclosure) and `metadata.knowledge_version`. It runs on every **production** build, so editing `/knowledge/*.md` and deploying updates the live agent. The last pushed version is stored in `config.vaani_agent_knowledge_version` |
+| Webhook | `POST /api/webhooks/vaani`, registered in Vaani → Developers → Webhooks → Agent Webhook. Events: Call Started, User Picked Up, Call Ended, Call Post-Processing (+ "Send all call details") |
+| Auth | HMAC-SHA256: `X-Vaani-Signature: sha256=hex(HMAC(secret, "<X-Vaani-Timestamp>.<raw body>"))`, 5-minute replay window. Uses `VAANI_WEBHOOK_SECRET`; the fallback is `?token=VAANI_WEBHOOK_TOKEN`, used only if no secret is set. Rejections are logged in `webhook_receipts`, and `dead_letters` records the header **names** only |
+| Pipeline | `src/lib/pipeline/process-call.ts`. Steps: caller upsert → merge calls from the same number within `merge_window_minutes` → score all of the enquiry's transcripts → enquiry fields, status and owner → cost events. Vaani needs a reply within 5 s, so scoring runs in `after()` |
+| Safety net | `src/lib/pipeline/sweep.ts`. A call stuck for more than 6 minutes is retried, up to 3 attempts, then goes to `dead_letters` + NEEDS_REVIEW (owner Nikhil). The sweep runs after every webhook and from `/api/cron/sweep` (Bearer `CRON_SECRET`) |
+| Simulator | `npm run simulate -- T01 [--phone +91…] [--dup] [--base URL]` replays a fixture as Vaani's webhook sequence. `npm run simulate -- --cleanup` deletes the simulated rows |
+
+**Languages.** The language is set in the **Vaani dashboard**: Hindi as primary, with "Enable English as fallback language" on. Speech-to-text is Deepgram nova-3 `hi` with 27 locality keywords. The voice is Cartesia "devansh" `hi`. The sync script deliberately never sends `senses_capabilities`, because PATCHing any speech field resets STT/TTS to `en` (observed 2026-10-09).
+
+**Verified 2026-10-09** with simulated webhooks against local and production:
+
+| Check | Result |
+|---|---|
+| T01 | QUALIFIED |
+| T09 | ESCALATED, owner Nikhil, with designer "Aryan" and the issue captured |
+| T17a + T17b, same number | **Merged** into one QUALIFIED enquiry |
+| Duplicate `call_postprocessing` | Ignored ("duplicate") |
+| Bad token / unsigned request | 401 |
+| Call stuck in `processing` | Re-scored by the sweeper |
+
+**Known Vaani quirks:**
+- `GET /api/call-history` returns **500 "Invalid client_id format"** for this workspace. Enrichment from call history is best effort; failures go to `dead_letters`, source `vaani_enrich`. The caller number comes from `call_started.phone_number` or the "Send all call details" payload.
+- The agent list shows `published: false` while the agent status is `running`. This needs confirming with a real call.
+
+**Observed costs** (from the dashboard, 2026-10-09; not yet entered as rate cards):
+- Agent: **₹5.60/min (est.)**. Billing is dynamic, "per minute, from active LLM + TTS + STT".
+- Wallet: ₹100 prepaid.
+- Phone numbers (Vobiz): ₹100 setup plus ₹500–999/month. Only Gujarat, Karnataka and "92 series" numbers were listed, with **no Maharashtra numbers**.
+
 ---
 
 ## Data model
@@ -197,6 +233,12 @@ These are conflicts or gaps in the source documents. The system makes each one *
 10. **Call recording & consent.** Under the DPDP Act 2023, the agent should disclose that calls are recorded and transcribed. Nikhil to approve the disclosure wording.
 11. **Commercial projects over ~3,000 sq ft.** `services.md` says "up to approximately 3,000 sq ft". Should these decline, or go to NEEDS_REVIEW? The default is NEEDS_REVIEW.
 12. **Senior callback SLA for escalations.** How fast must Nikhil or a senior call back an existing client?
+13. **Phone number.** Vaani's number marketplace has no Pune or Maharashtra numbers. The options are:
+    - Buy an out-of-state number, from ₹100 setup + ₹500/month, and **forward the studio's existing number to it**. Callers keep dialling the number they know.
+    - Bring Aangan's own number through a SIP trunk.
+14. **Vaani billing unit.** Call history reports `call_cost` "in credits", and the wallet is in INR. We assume 1 credit = ₹1; Vaani should confirm.
+15. **Dropped calls in the first minutes.** A call cut off before any content (T17a) is scored alone as NEEDS_REVIEW, then re-scored as part of the merged enquiry when the caller rings back. Phase 5 should hold alerts for content-free calls until the merge window passes.
+16. **Vercel Hobby crons run once a day.** The sweep and SLA timers need minute-level scheduling. The options are Vercel Pro or an external scheduler that calls `/api/cron/*`. Until then, the sweep also runs on every incoming webhook.
 
 ---
 
@@ -207,7 +249,7 @@ These are conflicts or gaps in the source documents. The system makes each one *
 | 0 | Repo, Next.js scaffold, Neon schema + migrations, `.env.example`, this README | GitHub repo, Neon connection string, Vercel project |
 | 1 | Knowledge loader, prompt generator, Gemini scorer (zod) | ✅ Gemini key, model IDs |
 | 2 | Evals: 19 September transcripts + red-team pricing tests | ✅ all pass |
-| 3 | Vaani webhook, signature, agent config push | Vaani docs, keys, rate card, language support |
+| 3 | Vaani webhook, signature, agent config push | ✅ built. Pending: webhook secret pasted in Vaani, phone number decision |
 | 4 | Calendly availability + booking/link flow | Calendly token, designer mapping, SMS/WhatsApp sender |
 | 5 | Telegram bot (brief, claim, reassign, rating, SLA) + email digest | Bot token, chat IDs, email provider + key |
 | 6 | Dashboard, /health, cost tracking | Rate cards, dashboard auth choice |
