@@ -1,0 +1,121 @@
+{
+  "T01": {
+    "header": "T01 · Phone · 2 September · 10:23am · 4 min 12 sec",
+    "files": [
+      "T01.txt"
+    ]
+  },
+  "T02": {
+    "header": "T02 · Phone · 3 September · 2:41pm · 5 min 08 sec",
+    "files": [
+      "T02.txt"
+    ]
+  },
+  "T03": {
+    "header": "T03 · Phone · 3 September · 4:15pm · 2 min 40 sec",
+    "files": [
+      "T03.txt"
+    ]
+  },
+  "T04": {
+    "header": "T04 · Phone · 4 September · 11:07am · 3 min 22 sec",
+    "files": [
+      "T04.txt"
+    ]
+  },
+  "T05": {
+    "header": "T05 · Phone · 5 September · 10:52am · 6 min 44 sec",
+    "files": [
+      "T05.txt"
+    ]
+  },
+  "T06": {
+    "header": "T06 · Phone · 5 September · 3:28pm · 5 min 01 sec",
+    "files": [
+      "T06.txt"
+    ]
+  },
+  "T07": {
+    "header": "T07 · Phone · 8 September · 9:44am · 3 min 15 sec",
+    "files": [
+      "T07.txt"
+    ]
+  },
+  "T08": {
+    "header": "T08 · Phone · 9 September · 10:47pm · MISSED CALL",
+    "files": []
+  },
+  "T09": {
+    "header": "T09 · Phone · 10 September · 11:32am · 5 min 52 sec — ESCALATE",
+    "files": [
+      "T09.txt"
+    ]
+  },
+  "T10": {
+    "header": "T10 · Phone · 11 September · 2:04pm · 3 min 40 sec",
+    "files": [
+      "T10.txt"
+    ]
+  },
+  "T11": {
+    "header": "T11 · Phone · 12 September · 10:18am · 6 min 22 sec",
+    "files": [
+      "T11.txt"
+    ]
+  },
+  "T12": {
+    "header": "T12 · Phone · 15 September · 10:05am · 7 min 30 sec",
+    "files": [
+      "T12.txt"
+    ]
+  },
+  "T13": {
+    "header": "T13 · Phone · 16 September · 12:19pm · 6 min 08 sec",
+    "files": [
+      "T13.txt"
+    ]
+  },
+  "T14": {
+    "header": "T14 · Phone · 17 September · 11:41am · 4 min 55 sec",
+    "files": [
+      "T14.txt"
+    ]
+  },
+  "T15": {
+    "header": "T15 · Phone · 18 September · 3:12pm · 5 min 44 sec",
+    "files": [
+      "T15.txt"
+    ]
+  },
+  "T16": {
+    "header": "T16 · Phone · 19 September · 10:38am · 5 min 18 sec",
+    "files": [
+      "T16.txt"
+    ]
+  },
+  "T17": {
+    "header": "T17 · Phone · 22 September · 2:14pm then 2:16pm",
+    "files": [
+      "T17a.txt",
+      "T17b.txt"
+    ]
+  },
+  "T18": {
+    "header": "T18 · Phone · 23 September · 11:55am · 3 min 02 sec",
+    "files": [
+      "T18.txt"
+    ]
+  },
+  "T19": {
+    "header": "T19 · Phone · 24 September · 4:02pm · 2 min 50 sec",
+    "files": [
+      "T19.txt"
+    ]
+  },
+  "T20": {
+    "header": "T20 · Phone · 25 September · 9:15am · 4 min 44 sec",
+    "files": [
+      "T20.txt"
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import { knowledge as defaultKb, buildScorerSystemPrompt, type KnowledgeBase, type PromptConfig, DEFAULT_PROMPT_CONFIG } from "../knowledge";
+import { ApiError } from "@google/genai";
 import { generateJson, type ModelTier } from "../llm/gemini";
 import { scanAgentTurnsForPricing, type PricingHit } from "../guardrail/pricing";
 import { parseTranscript, renderTranscript, type Turn } from "../transcript";
@@ -58,7 +59,7 @@ ${rendered}`;
     const retryNote = attempts.length
       ? `\n\nYOUR PREVIOUS RESPONSE WAS INVALID: ${attempts[attempts.length - 1].error}\nReturn corrected JSON only.`
       : "";
-    const res = await generateJson({ tier: input.tier ?? "smart", system, user: user + retryNote, jsonSchema: modelVerdictJsonSchema });
+    const res = await generateWithFallback(input.tier ?? "smart", { system, user: user + retryNote, jsonSchema: modelVerdictJsonSchema });
     model = res.model;
     modelVersion = res.modelVersion;
     usage.inputTokens += res.usage.inputTokens;
@@ -90,6 +91,24 @@ ${rendered}`;
     };
   }
   throw new ScorerError("Scorer returned invalid JSON twice", attempts);
+}
+
+const isTransient = (e: unknown) =>
+  (e instanceof ApiError && (e.status >= 500 || e.status === 429)) || (e instanceof Error && /timeout|timed out|ECONNRESET|fetch failed/i.test(e.message));
+
+/** Transient API failure (5xx/429/timeout): retry once on the same tier, then once on the other tier. Non-transient errors throw immediately. */
+async function generateWithFallback(tier: ModelTier, req: { system: string; user: string; jsonSchema: unknown }) {
+  const plan: ModelTier[] = [tier, tier, tier === "smart" ? "fast" : "smart"];
+  let last: unknown;
+  for (const t of plan) {
+    try {
+      return await generateJson({ tier: t, ...req });
+    } catch (e) {
+      if (!isTransient(e)) throw e;
+      last = e;
+    }
+  }
+  throw last;
 }
 
 function stripFences(s: string) {

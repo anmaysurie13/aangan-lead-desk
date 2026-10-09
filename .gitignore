@@ -48,3 +48,6 @@ next-env.d.ts
 
 # generated at build time from /knowledge
 src/generated/
+
+# eval run dumps (LATEST-*.md are committed)
+evals/results/*.json

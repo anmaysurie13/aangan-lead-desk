@@ -17,7 +17,9 @@
         "prebuild": "npm run knowledge",
         "pretest": "npm run knowledge",
         "pretypecheck": "npm run knowledge",
-        "score": "tsx scripts/score.ts"
+        "score": "tsx scripts/score.ts",
+        "evals": "tsx evals/run.ts",
+        "fixtures": "tsx scripts/extract-fixtures.ts"
     },
     "dependencies": {
         "@google/genai": "^2.28.0",

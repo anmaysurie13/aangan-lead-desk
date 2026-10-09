@@ -32,6 +32,23 @@ export type JsonCallResult = {
   usedBackupKey: boolean;
 };
 
+/** Plain multi-turn text generation. Used by the red-team evals to simulate the voice agent from its generated prompt. */
+export async function generateText(opts: {
+  tier: ModelTier;
+  system: string;
+  messages: { role: "user" | "model"; text: string }[];
+}): Promise<{ text: string; model: string }> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY is not set");
+  const model = modelId(opts.tier);
+  const res = await client(key).models.generateContent({
+    model,
+    contents: opts.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
+    config: { systemInstruction: opts.system, temperature: 0.7 },
+  });
+  return { text: (res.text ?? "").trim(), model };
+}
+
 export async function generateJson(opts: {
   tier: ModelTier;
   system: string;
