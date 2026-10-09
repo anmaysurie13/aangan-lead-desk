@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { getConfig } from "@/lib/config";
+import { createBookingForEnquiry } from "@/lib/booking/booking";
 import { scoreCall, ScorerError } from "@/lib/scorer/score";
 import { parseTranscript } from "@/lib/transcript";
 import type { Verdict } from "@/lib/scorer/schema";
@@ -195,7 +196,10 @@ async function recordGeminiCost(callId: string, usage: { inputTokens: number; ou
 
 /** Phase 5 hook: Telegram brief / urgent alert / breach alert / digest. Until then, nothing is sent. */
 async function routeOutcome(input: { enquiryId: string; callId: string; verdict: Verdict; pricingBreach: boolean }) {
-  void input;
+  // Phase 4: qualified leads get a designer + single-use Calendly link. Phase 5 adds Telegram/email alerts here.
+  if (input.verdict.outcome === "QUALIFIED" || input.verdict.outcome === "QUALIFIED_WITH_NOTE") {
+    await createBookingForEnquiry(input.enquiryId);
+  }
 }
 
 /** Normalises Vaani's "[hh:mm:ss] AGENT: ...\n\n[..] USER: ..." transcript into our "AGENT:/CALLER:" lines. */

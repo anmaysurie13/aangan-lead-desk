@@ -69,7 +69,9 @@ export const designers = pgTable("designers", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   telegramChatId: text("telegram_chat_id"),
-  calendlyUser: text("calendly_user"), // Calendly user URI; exact format confirmed in Phase 4
+  calendlyUser: text("calendly_user"), // Calendly user URI (https://api.calendly.com/users/…)
+  calendlyEventTypeUri: text("calendly_event_type_uri"), // the consultation event type to book
+  phone: text("phone"),
   email: text("email"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -208,7 +210,12 @@ export const bookings = pgTable("bookings", {
   enquiryId: uuid("enquiry_id").notNull().references(() => enquiries.id),
   designerId: uuid("designer_id").references(() => designers.id),
   calendlyEventUri: text("calendly_event_uri"),
+  calendlyInviteeUri: text("calendly_invitee_uri"),
+  calendlyEventTypeUri: text("calendly_event_type_uri"),
   schedulingLink: text("scheduling_link"),
+  offeredSlots: jsonb("offered_slots"), // next available start times (UTC) at link creation
+  linkSentAt: timestamp("link_sent_at", { withTimezone: true }),
+  error: text("error"),
   slotStart: timestamp("slot_start", { withTimezone: true }),
   slotEnd: timestamp("slot_end", { withTimezone: true }),
   siteVisitRequested: boolean("site_visit_requested"),

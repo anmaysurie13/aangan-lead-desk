@@ -54,3 +54,6 @@ evals/results/*.json
 
 # local helper with the full webhook URL (contains a secret token)
 *.local.txt
+
+# designer mapping with personal contact details
+designers.local.json

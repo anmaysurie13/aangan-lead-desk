@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Designer Name",
+    "calendly_event_type_uri": "https://api.calendly.com/event_types/XXXXXXXXXXXXXXXX",
+    "telegram_chat_id": "",
+    "email": "designer@example.com",
+    "phone": "+91XXXXXXXXXX",
+    "active": true
+  }
+]
