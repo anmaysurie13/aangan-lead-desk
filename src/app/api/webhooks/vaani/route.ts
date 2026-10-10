@@ -6,7 +6,7 @@ import { KNOWLEDGE_VERSION } from "@/lib/knowledge";
 import { normaliseVaaniTranscript, processCall } from "@/lib/pipeline/process-call";
 import { runPeriodicTasks } from "@/lib/pipeline/periodic";
 import { findCallInHistory } from "@/lib/vaani/client";
-import { eventCallId, isPostProcessing, VaaniEvent, verifyVaaniRequest } from "@/lib/vaani/webhook";
+import { eventCallId, isPostProcessing, normalizeEvents, type VaaniEvent, verifyVaaniRequest } from "@/lib/vaani/webhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +14,11 @@ export const maxDuration = 300; // scoring runs after the 200 is sent (Vaani req
 
 /**
  * Vaani → us. Every request is logged in webhook_receipts (also feeds /health and the no-webhook alert).
+ * Auth (any ONE of): x-webhook-signature HMAC (when a Secret is saved in Vaani), X-Vaani-Signature HMAC, or ?token=.
  * - Lifecycle events upsert the call row (caller number from call_started, answer time, duration).
  * - call_postprocessing stores the transcript and schedules scoring with after().
  * - Idempotent: calls.vaani_call_id is unique; an already-scored call is never re-scored.
+ * - A body may hold one event or a batch ({ events: [...] }).
  */
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -24,51 +26,61 @@ export async function POST(req: NextRequest) {
     rawBody,
     signature: req.headers.get("x-vaani-signature"),
     timestamp: req.headers.get("x-vaani-timestamp"),
+    webhookSignature: req.headers.get("x-webhook-signature"),
     urlToken: req.nextUrl.searchParams.get("token"),
     secret: process.env.VAANI_WEBHOOK_SECRET || undefined,
     token: process.env.VAANI_WEBHOOK_TOKEN || undefined,
   });
 
-  let event: VaaniEvent | null = null;
+  let json: unknown = null;
   try {
-    event = VaaniEvent.parse(JSON.parse(rawBody));
+    json = JSON.parse(rawBody);
   } catch {
-    /* logged below */
+    /* handled below */
   }
-  const vaaniCallId = event ? eventCallId(event) : null;
+  const topEvent = (json as { event?: unknown } | null)?.event;
   const d = db();
 
   if (!auth.ok) {
-    await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: vaaniCallId, signatureValid: false });
-    // Debug aid for signature-format mismatches: header NAMES only (never values) + reason.
+    await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: null, signatureValid: false });
     await d.insert(schema.deadLetters).values({
       source: "vaani_auth",
-      externalId: vaaniCallId,
-      payload: {
-        headerNames: [...req.headers.keys()],
-        event: event?.event ?? null,
-        // Signature debugging (2026-10-10): only for non-call events, so no transcripts are ever stored here.
-        ...(event?.event === "webhook_test" ? { xWebhook: Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-webhook"))), body: rawBody.slice(0, 6000) } : {}),
-      },
+      payload: { headerNames: [...req.headers.keys()], event: typeof topEvent === "string" ? topEvent : null },
       error: auth.reason,
     });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (event?.event === "webhook_test") {
+
+  if (topEvent === "webhook_test") {
     // Vaani dashboard "Test Connectivity" ping. Logged so /health shows the last contact.
     await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: "webhook_test", signatureValid: true });
     return NextResponse.json({ status: "ok" });
   }
-  if (!event || !vaaniCallId) {
+
+  const events = normalizeEvents(json);
+  if (!events.length) {
     await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: null, signatureValid: true });
-    await d.insert(schema.deadLetters).values({ source: "vaani_webhook", payload: safeJson(rawBody), error: "unparseable payload" });
+    await d.insert(schema.deadLetters).values({ source: "vaani_webhook", payload: safeJson(rawBody), error: "no recognisable events in payload" });
     return NextResponse.json({ status: "ignored" }, { status: 200 }); // 2xx so Vaani doesn't retry garbage
+  }
+
+  const results: string[] = [];
+  for (const event of events) results.push(await handleEvent(event));
+  return NextResponse.json({ status: "ok", events: results });
+}
+
+async function handleEvent(event: VaaniEvent): Promise<string> {
+  const d = db();
+  const vaaniCallId = eventCallId(event);
+  if (!vaaniCallId) {
+    await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: null, signatureValid: true });
+    return "no_call_id";
   }
 
   const [existing] = await d.select().from(schema.calls).where(eq(schema.calls.vaaniCallId, vaaniCallId)).limit(1);
   const duplicate = isPostProcessing(event) && existing?.processingStatus === "scored";
   await d.insert(schema.webhookReceipts).values({ source: "vaani", externalId: vaaniCallId, signatureValid: true, duplicate });
-  if (duplicate) return NextResponse.json({ status: "duplicate" });
+  if (duplicate) return "duplicate";
 
   const now = new Date();
   const patch: Partial<typeof schema.calls.$inferInsert> = {};
@@ -122,7 +134,7 @@ export async function POST(req: NextRequest) {
     }
     await runPeriodicTasks().catch(() => undefined); // sweep stuck calls, SLA re-alerts, silence alert, digest (idempotent)
   });
-  return NextResponse.json({ status: "ok" });
+  return event.event;
 }
 
 /** Best effort: caller number, timestamps and Vaani's own call_cost from call-history. Never blocks scoring. */

@@ -14,16 +14,35 @@ import { z } from "zod";
  */
 export type AuthResult = { ok: true; method: "hmac" | "token" } | { ok: false; reason: string };
 
+/**
+ * Observed 2026-10-10: when a Secret is saved on the agent webhook, Vaani sends
+ *   x-webhook-signature: sha256=<hex HMAC-SHA256(secret, rawBody)>
+ * (no timestamp header, so no replay window; replays are harmless because processing is idempotent by call id).
+ * Confirmed by recomputing the HMAC of a logged test ping.
+ */
+export function verifyWebhookSignature(rawBody: string, header: string, secret: string): boolean {
+  const got = header.trim().replace(/^sha256=/i, "");
+  const want = createHmac("sha256", secret).update(rawBody).digest("hex");
+  const a = Buffer.from(want);
+  const b = Buffer.from(got);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export function verifyVaaniRequest(opts: {
   rawBody: string;
   signature: string | null;
   timestamp: string | null;
+  webhookSignature?: string | null;
   urlToken: string | null;
   secret?: string;
   token?: string;
   nowSec?: number;
 }): AuthResult {
   const now = opts.nowSec ?? Math.floor(Date.now() / 1000);
+  if (opts.webhookSignature) {
+    if (!opts.secret) return { ok: false, reason: "x-webhook-signature present but VAANI_WEBHOOK_SECRET not set" };
+    return verifyWebhookSignature(opts.rawBody, opts.webhookSignature, opts.secret) ? { ok: true, method: "hmac" } : { ok: false, reason: "bad x-webhook-signature" };
+  }
   const signed = Boolean(opts.signature || opts.timestamp);
   if (signed) {
     if (!opts.secret) return { ok: false, reason: "signed request but VAANI_WEBHOOK_SECRET not set" };
@@ -91,4 +110,22 @@ export function eventCallId(e: VaaniEvent): string | null {
   if (isPostProcessing(e)) return e.call_id ?? e.data.call_id ?? e.data.room_name ?? null;
   const r = (e as { room_name?: unknown }).room_name;
   return typeof r === "string" ? r : null;
+}
+
+/**
+ * A webhook body is either one event or a batch `{ events: [...] }` (the dashboard test ping uses the batch form).
+ * Lifecycle events may carry their fields under `data`; hoist them so one schema covers both shapes.
+ */
+export function normalizeEvents(json: unknown): VaaniEvent[] {
+  const root = (json ?? {}) as Record<string, unknown>;
+  const list = Array.isArray(root.events) ? (root.events as unknown[]) : [root];
+  const out: VaaniEvent[] = [];
+  for (const el of list) {
+    if (!el || typeof el !== "object") continue;
+    const o = el as Record<string, unknown>;
+    const flat = o.event !== "call_postprocessing" && o.data && typeof o.data === "object" ? { ...(o.data as Record<string, unknown>), ...o } : o;
+    const parsed = VaaniEvent.safeParse(flat);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
 }
