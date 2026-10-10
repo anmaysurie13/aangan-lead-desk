@@ -11,6 +11,7 @@ const nullableStr = z.string().nullable();
 export const Captured = z.object({
   caller_name: nullableStr,
   caller_email: nullableStr,
+  caller_phone: nullableStr,
   locality: nullableStr,
   property_type: nullableStr,
   bhk: nullableStr,

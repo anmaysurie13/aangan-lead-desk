@@ -36,6 +36,13 @@
       "when": 1791552620781,
       "tag": "0004_caller_email",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791625176638,
+      "tag": "0005_web_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -1,28 +1,20 @@
-import nodemailer, { type Transporter } from "nodemailer";
 import { db, schema } from "@/db/client";
 import { scanAgentTurnsForPricing } from "@/lib/guardrail/pricing";
 
 /**
- * Outbound email (the only channel: no Telegram/SMS, per Nikhil 2026-10-09).
- * SMTP via nodemailer: works with a Gmail/Google Workspace app password, Outlook, Zoho or any SMTP relay.
- *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM
+ * Outbound email via Resend (https://resend.com/docs/api-reference/emails/send-email):
+ *   POST https://api.resend.com/emails   Authorization: Bearer RESEND_API_KEY
+ *   { from, to: string[], subject, text, html? }  →  { id }
+ * Env: RESEND_API_KEY (a send-only key is enough), EMAIL_FROM (e.g. "Aangan Studio <desk@yourdomain.in>").
+ * Until a domain is verified in Resend, EMAIL_FROM falls back to onboarding@resend.dev, and Resend only delivers
+ * that sender's mail to the Resend account owner's own address (error recorded per send; see /health).
  * Every send is recorded in notifications (delivered flag + error). Caller-facing text passes the pricing guardrail.
- * Not configured → nothing is sent and the row says so explicitly.
  */
 export type SendResult = { delivered: boolean; error?: string; messageId?: string };
 
-let transport: Transporter | null = null;
-function smtp() {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
-  transport ??= nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT ?? 465),
-    secure: Number(SMTP_PORT ?? 465) === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
-  return transport;
-}
+export const SANDBOX_FROM = "Aangan Studio <onboarding@resend.dev>";
+export const emailConfigured = () => Boolean(process.env.RESEND_API_KEY);
+export const usingSandboxSender = () => !process.env.EMAIL_FROM || /@resend\.dev>?$/i.test(process.env.EMAIL_FROM);
 
 export async function sendEmail(msg: {
   to: string;
@@ -37,13 +29,18 @@ export async function sendEmail(msg: {
 }): Promise<SendResult> {
   let result: SendResult;
   const breach = msg.callerFacing ? scanAgentTurnsForPricing([{ speaker: "agent", text: `${msg.subject}\n${msg.text}` }]) : [];
-  const t = smtp();
   if (breach.length) result = { delivered: false, error: `blocked by pricing guardrail: ${breach[0].match}` };
-  else if (!t) result = { delivered: false, error: "email_not_configured" };
+  else if (!emailConfigured()) result = { delivered: false, error: "email_not_configured" };
   else {
     try {
-      const info = await t.sendMail({ from: process.env.EMAIL_FROM ?? process.env.SMTP_USER, to: msg.to, subject: msg.subject, text: msg.text, html: msg.html });
-      result = { delivered: true, messageId: info.messageId };
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: process.env.EMAIL_FROM || SANDBOX_FROM, to: [msg.to], subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}) }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string; name?: string };
+      result = res.ok ? { delivered: true, messageId: body.id } : { delivered: false, error: `resend ${res.status}: ${body.message ?? body.name ?? "error"}`.slice(0, 500) };
     } catch (e) {
       result = { delivered: false, error: e instanceof Error ? e.message.slice(0, 500) : String(e) };
     }
@@ -68,16 +65,11 @@ export async function sendEmail(msg: {
 
 export const isEmail = (s: string | null | undefined): s is string => !!s && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
 
-/** For /health: verifies the SMTP login without sending anything. ok:null = not configured. */
-export async function smtpReady(): Promise<{ ok: boolean | null; detail: string }> {
-  const t = smtp();
-  if (!t) return { ok: null, detail: "SMTP_HOST / SMTP_USER / SMTP_PASS not set: no email can be sent" };
-  try {
-    await t.verify();
-    return { ok: true, detail: `SMTP login OK (${process.env.SMTP_USER})` };
-  } catch (e) {
-    return { ok: false, detail: e instanceof Error ? e.message.slice(0, 160) : String(e) };
+/** For /health. A send-only key can't be checked without sending, so report configuration + the sandbox caveat. */
+export async function emailReady(): Promise<{ ok: boolean | null; detail: string }> {
+  if (!emailConfigured()) return { ok: null, detail: "RESEND_API_KEY not set: no email can be sent" };
+  if (usingSandboxSender()) {
+    return { ok: null, detail: "Resend key set, but the sender is Resend's sandbox (onboarding@resend.dev): it only delivers to the Resend account owner. Verify a domain in Resend and set EMAIL_FROM to email callers and designers." };
   }
+  return { ok: true, detail: `Resend key set; sending as ${process.env.EMAIL_FROM}` };
 }
-
-export const emailConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);

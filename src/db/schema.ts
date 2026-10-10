@@ -295,3 +295,16 @@ export const webhookReceipts = pgTable(
   },
   (t) => [index("webhook_receipts_source_received_idx").on(t.source, t.receivedAt)],
 );
+
+// Browser voice calls (WebRTC): one row per session started, used for abuse limits and traceability.
+export const webSessions = pgTable(
+  "web_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomName: text("room_name").notNull(),
+    ipHash: text("ip_hash").notNull(), // sha256(ip + AUTH_SECRET): never the raw IP
+    language: text("language").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("web_sessions_created_idx").on(t.createdAt), index("web_sessions_ip_idx").on(t.ipHash, t.createdAt)],
+);

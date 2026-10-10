@@ -4,7 +4,7 @@ Inbound phone enquiry system for **Aangan Studio**, an interior design studio in
 
 Every call is answered within 5 seconds, day or night. Each call is qualified against Nikhil's rubric, and qualified leads reach a designer on Telegram within 60 seconds of hang-up with the full brief. Nikhil gets one dashboard covering what the system generates and what it costs.
 
-> **Status:** Phase 4 code done (Calendly single-use links, booking webhook). Waiting on: Calendly token + designer mapping, SMS/WhatsApp provider, Vaani webhook URL with token. See [Phases](#phases).
+> **Status:** Built through Phase 6 plus browser voice calls (`/talk`). Live: Vaani webhook, Calendly booking links, dashboard. Waiting on: a domain verified in Resend (so mail reaches callers and designers), Nikhil's and designers' emails, then Phase 7 (test calls + launch checklist). See [Phases](#phases).
 
 ---
 
@@ -179,14 +179,14 @@ The provider is **Vaani AI Research**. Docs are at [docs.vaanivoice.ai](https://
 
 | Decision | Why (developer.calendly.com, 2026-10-09) |
 |---|---|
-| **Single-use scheduling link** (`POST /scheduling_links`), sent to the caller by SMS/WhatsApp | Direct booking (`POST /invitees`, "Scheduling API") needs a **paid plan** and the invitee's **email**, and an email spelled out over the phone is unreliable. The brief's fallback applies |
-| Show the **next 2 open slots** (`GET /event_type_available_times`) in the SMS and the designer brief | This gives the caller and designer concrete options without fake promises. The voice agent doesn't quote slots in the call, because live slot lookup during the call would need a Vaani "Tools & Actions" HTTP tool, which is not in Vaani's API docs |
+| **Single-use scheduling link** (`POST /scheduling_links`), emailed to the caller | Direct booking (`POST /invitees`, "Scheduling API") needs a **paid plan** and the invitee's **email**, and an email spelled out over the phone is unreliable. The brief's fallback applies |
+| Show the **next 2 open slots** (`GET /event_type_available_times`) in the email and the designer brief | This gives the caller and designer concrete options without fake promises. The voice agent doesn't quote slots in the call, because live slot lookup during the call would need a Vaani "Tools & Actions" HTTP tool, which is not in Vaani's API docs |
 | Link tagged `utm_content=<booking id>` | `invitee.created` carries `tracking.utm_content`, so the booking maps back exactly. The fallback is the only open booking for that event type; anything else goes to `dead_letters` |
 | Designer assignment: round-robin | Active designers with a Calendly event type, least recently assigned first (open question 7) |
 
 Flow:
 1. A QUALIFIED or QUALIFIED_WITH_NOTE call triggers `createBookingForEnquiry`.
-2. That creates a `bookings` row (`link_created`, then `link_sent` once SMS is configured).
+2. That creates a `bookings` row (`link_created`, then `link_sent` once the email is delivered).
 3. Calendly `invitee.created` moves the enquiry to **BOOKED** with `booked_at` and the slot. `invitee.canceled` moves it back to QUALIFIED.
 
 Setup:
@@ -207,7 +207,7 @@ Token scopes: `users:read event_types:read availability:read scheduling_links:wr
 | **Designer** | Brief (every field or "unknown"), the single-use link, a signed **"I'll take it"** link, 1–5 **rating** links, and a signed link to the transcript page | The claim link opens a confirm button; email scanners that pre-fetch links can't claim a lead |
 | **Nikhil** | URGENT escalations, PRICING BREACH alerts, unclaimed-lead escalations, no-webhook alert, 8pm digest | Needs `NIKHIL_EMAIL` |
 
-SMTP via nodemailer (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`), for example a Gmail app password. Until it's configured, every send is **recorded as `email_not_configured`** and nothing leaves the system.
+Email is sent with **Resend** (`POST https://api.resend.com/emails`; env `RESEND_API_KEY`, `EMAIL_FROM`). A send-only key is enough. **Until a domain is verified in Resend, mail goes out from Resend's sandbox sender `onboarding@resend.dev`, which Resend only delivers to the account owner's own address.** To email callers and designers, verify a domain in Resend (add its DNS records) and set `EMAIL_FROM`. Until `RESEND_API_KEY` is set, every send is **recorded as `email_not_configured`** and nothing leaves the system. Failures (for example the sandbox restriction) are stored per message in `notifications.error`.
 
 Calendly notifies us via webhook (`/api/webhooks/calendly`). A polling fallback (`pollCalendlyBookings`) also matches bookings to links by the tracking tag. It runs from the periodic task, in case webhooks aren't available on the free plan.
 
@@ -221,7 +221,7 @@ Calendly notifies us via webhook (`/api/webhooks/calendly`). A polling fallback 
 | `/dashboard/insights` | Answered-under-5-min, after-hours, qualified, cost per lead; when people call (hour chart); before and now (48% baseline vs measured); the funnel; where enquiries went; why some weren't a fit; "the cut" (asked the price vs quoted); cost |
 | `/dashboard/monthly` | The "September-style" monthly table plus CSV |
 | `/lead?e=…` | Lead detail: criteria with the caller's own words, booking, timeline, full transcript. Open to the dashboard session or to a designer with the signed link in their email |
-| `/health` | Live checks: Neon, Gemini, Vaani + agent knowledge drift, last webhook, rejected webhooks, Calendly, SMTP, dead letters, stuck calls |
+| `/health` | Live checks: Neon, Gemini, Vaani + agent knowledge drift, last webhook, rejected webhooks, Calendly, Resend, dead letters, stuck calls |
 
 Look: a "courtyard" theme (sage mist, deep teal, brass; Fraunces + Manrope; interior photography), inspired by the studio's own front-desk site and isolated to the `(desk)` route group.
 
@@ -335,3 +335,19 @@ The pipeline after "transcript received" doesn't depend on the channel. Adding a
 - **Website form.** The form POSTs to `/api/intake/form`. Most fields arrive pre-filled (locality, BHK, scope, timeline), so the scorer gets structured fields plus any free-text message. It mainly fills gaps and lists `open_questions`. `enquiries.channel = 'web_form'`. Same routing, brief, SLA and dashboard.
 
 Because every channel writes to the same `enquiries` table with the same funnel timestamps, Nikhil's monthly summary covers all three channels without any changes to the dashboard.
+
+### Browser voice call (decision 2026-10-10: no phone number, WebRTC instead)
+
+Customers talk to the agent from their browser at **`/talk`** (public, no login). Flow: the page asks our `POST /api/talk/start` for a session → that calls Vaani `POST /api/trigger-call/` with `medium: "webrtc"` (docs.vaanivoice.ai/api-reference/trigger-call), which returns a LiveKit `token` + `connection_url` → the browser joins with `livekit-client`, plays the agent's audio and sends the mic. Language buttons (English / हिन्दी) set `primary_language` with English as the fallback. After the call everything is identical to a phone call: Vaani's webhook → scoring → booking link by email.
+
+- **No caller ID:** the agent now asks for a name and a phone number and reads it back; the scorer stores it as `caller_phone` and the pipeline creates the caller from it (`src/lib/phone.ts` normalises to +91…). Web calls are not auto-merged, so a dropped browser call and its retry show as two enquiries.
+- **Cost protection** (the endpoint is public and Vaani bills per minute): 3 sessions per visitor per 10 minutes, 40 per hour overall (`web_sessions` table, IPs stored only as hashes), and every call is capped at 10 minutes (`call_settings.max_call_duration`, set by `vaani:sync`).
+- **Share:** put the `/talk` link on the website, Instagram bio, or a QR code on site boards.
+- Needs microphone permission and HTTPS (the live site has both).
+
+### Cost rate cards (2026-10-10)
+
+| Vendor | Rate | Source |
+|---|---|---|
+| Vaani | ₹5.60/min | Vaani dashboard estimate for the agent (replace with the invoiced rate) |
+| Gemini 3.1 Pro (scorer) | ₹193.73 in / ₹1,162.41 out per 1M tokens | Google's list price $2.00 / $12.00 (output includes thinking) × ₹96.87/US$ on 2026-10-10 |

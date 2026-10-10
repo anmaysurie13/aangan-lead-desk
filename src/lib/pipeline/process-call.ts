@@ -3,6 +3,7 @@ import { db, schema } from "@/db/client";
 import { getConfig } from "@/lib/config";
 import { createBookingForEnquiry } from "@/lib/booking/booking";
 import { sendEmail } from "@/lib/messaging/send";
+import { normalizePhone } from "@/lib/phone";
 import { scoreCall, ScorerError } from "@/lib/scorer/score";
 import { parseTranscript } from "@/lib/transcript";
 import type { Verdict } from "@/lib/scorer/schema";
@@ -129,6 +130,19 @@ export async function processCall(callRowId: string): Promise<{ status: string; 
         updatedAt: now,
       })
       .where(eq(schema.enquiries.id, enquiryId));
+
+    // Browser (WebRTC) calls have no caller ID: identify the caller by the number they gave and confirmed on the call.
+    const spoken = normalizePhone(cap.caller_phone);
+    if (!callerId && spoken) {
+      const [c] = await d
+        .insert(schema.callers)
+        .values({ phone: spoken, name: cap.caller_name })
+        .onConflictDoUpdate({ target: schema.callers.phone, set: { lastSeenAt: new Date(), ...(cap.caller_name ? { name: cap.caller_name } : {}) } })
+        .returning({ id: schema.callers.id });
+      callerId = c.id;
+      await d.update(schema.enquiries).set({ callerId }).where(eq(schema.enquiries.id, enquiryId));
+      await d.update(schema.calls).set({ callerId, fromNumber: spoken }).where(eq(schema.calls.id, call.id));
+    }
 
     await d
       .update(schema.calls)

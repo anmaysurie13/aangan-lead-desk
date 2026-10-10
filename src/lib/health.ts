@@ -4,7 +4,7 @@ import { getConfig } from "@/lib/config";
 import { KNOWLEDGE_VERSION } from "@/lib/knowledge";
 import { listAgents } from "@/lib/vaani/client";
 import { getMe } from "@/lib/calendly/client";
-import { smtpReady } from "@/lib/messaging/send";
+import { emailReady } from "@/lib/messaging/send";
 
 export type Check = { name: string; ok: boolean | null; detail: string };
 
@@ -67,7 +67,8 @@ export async function runHealthChecks(): Promise<Check[]> {
     out.push({ name: "Calendly", ok: !c.err, detail: c.err ?? `token OK for ${c.v!.name} (${c.ms} ms)` });
   }
 
-  out.push({ name: "Email (SMTP)", ok: (await smtpReady()).ok, detail: (await smtpReady()).detail });
+  const mail = await emailReady();
+  out.push({ name: "Email (Resend)", ok: mail.ok, detail: mail.detail });
 
   const dl = (await db().execute(sql`select count(*)::int as n from dead_letters where resolved_at is null and source <> 'vaani_enrich'`)).rows[0] as { n: number };
   out.push({ name: "Dead letters (unresolved)", ok: dl.n === 0, detail: dl.n ? `${dl.n} failed items need a look (table dead_letters)` : "none" });

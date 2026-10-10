@@ -77,3 +77,23 @@ export async function findCallInHistory(callId: string, maxPages = 3): Promise<V
   }
   return null;
 }
+
+export type WebrtcSession = { token: string; room_name: string; connection_url: string; live_captions_url?: string; agent_name?: string };
+
+/**
+ * POST /api/trigger-call/ with medium "webrtc" (docs.vaanivoice.ai/api-reference/trigger-call): returns a LiveKit
+ * token + connection_url that the browser joins with livekit-client. Language: primary + English fallback.
+ */
+export async function startWebrtcSession(opts: { agentId: string; language: "en" | "hi" }) {
+  return call<WebrtcSession>("POST", "/api/trigger-call/", {
+    agent_id: opts.agentId,
+    medium: "webrtc",
+    primary_language: opts.language,
+    secondary_language: "en",
+  });
+}
+
+/** PATCH /api/agent/{id}/experience: used to cap call length (call_settings.max_call_duration, minutes). */
+export async function updateExperience(agentId: string, experience: Record<string, unknown>) {
+  return call<Record<string, unknown>>("PATCH", `/api/agent/${agentId}/experience`, experience);
+}
