@@ -95,6 +95,7 @@ async function handleEvent(event: VaaniEvent): Promise<string> {
       break;
     case "call_ended":
       patch.endedAt = now;
+      if (typeof e.end_reason === "string") patch.endReason = e.end_reason;
       if (typeof e.call_duration === "number") patch.durationSec = Math.round(e.call_duration);
       break;
   }
@@ -103,6 +104,7 @@ async function handleEvent(event: VaaniEvent): Promise<string> {
     patch.rawTranscript = event as unknown as Record<string, unknown>;
     patch.transcriptText = data.transcript ? normaliseVaaniTranscript(data.transcript) : null;
     patch.recordingUrl = data.recording_url ?? null;
+    if (typeof data.end_reason === "string" && !existing?.endReason) patch.endReason = data.end_reason;
     if (typeof data.call_duration === "number") patch.durationSec = Math.round(data.call_duration / 1000);
     patch.endedAt = existing?.endedAt ?? (event.timestamp ? new Date(event.timestamp) : now);
     // With "Send all call details" enabled, Vaani may include call-record fields. Read only the names

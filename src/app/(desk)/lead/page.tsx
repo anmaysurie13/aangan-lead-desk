@@ -121,7 +121,7 @@ export default async function Lead({ searchParams }: { searchParams: Promise<Rec
         <h2>Transcript{calls.length > 1 ? "s (merged calls)" : ""}</h2>
         {calls.length ? calls.map((c, i) => (
           <div key={c.id} style={{ marginTop: i ? 24 : 0 }}>
-            <p className="d-label" style={{ marginBottom: 10 }}>Call {i + 1} · {dt(c.answeredAt ?? c.receivedAt)} · {c.durationSec ? `${Math.round(c.durationSec / 60)} min` : "duration n/a"}{c.pricingBreach ? " · PRICE QUOTED, REVIEW" : ""}</p>
+            <p className="d-label" style={{ marginBottom: 10 }}>Call {i + 1} · {dt(c.answeredAt ?? c.receivedAt)} · {c.durationSec ? `${Math.round(c.durationSec / 60)} min` : "duration n/a"}{c.endReason ? ` · ended: ${c.endReason}` : ""}{c.pricingBreach ? " · PRICE QUOTED, REVIEW" : ""}</p>
             <div className="d-transcript">
               {parseTranscript(c.transcriptText ?? "").map((t, j) => <div key={j} className={`d-turn ${t.speaker}`}><small>{t.speaker === "agent" ? "AANGAN" : "CALLER"}</small>{t.text}</div>)}
               {!c.transcriptText && <p className="d-note">No transcript received.</p>}

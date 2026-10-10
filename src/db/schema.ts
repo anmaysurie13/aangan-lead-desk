@@ -169,6 +169,7 @@ export const calls = pgTable(
     pricingBreach: boolean("pricing_breach").notNull().default(false),
     pricingBreachHits: jsonb("pricing_breach_hits"),
     processingStatus: text("processing_status").notNull().default("received"), // received | processing | scored | failed | no_transcript
+    endReason: text("end_reason"), // from Vaani call_ended / call_postprocessing: who/what ended the call
     processingAttempts: integer("processing_attempts").notNull().default(0),
     processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
