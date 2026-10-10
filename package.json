@@ -42,7 +42,6 @@
     },
     "devDependencies": {
         "@eslint/eslintrc": "^3",
-        "@livekit/rtc-node": "^1.1.0",
         "@tailwindcss/postcss": "^4",
         "@types/node": "^24.19.1",
         "@types/react": "^19",

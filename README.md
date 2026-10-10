@@ -345,6 +345,10 @@ Customers talk to the agent from their browser at **`/talk`** (public, no login)
 - **Share:** put the `/talk` link on the website, Instagram bio, or a QR code on site boards.
 - Needs microphone permission and HTTPS (the live site has both).
 
+**Personalised greeting and captions.** The page asks for the caller's name first. `/api/talk/start` sends Vaani a per-call `modify_agent` override (documented, deep-merged): the greeting becomes "Namaste <name>, thank you for calling Aangan Studio. This call is recorded…", and the caller's name is appended to the prompt so the agent never asks for it again. (Vaani ignores the separate `welcome_message` field, so the override is what works.) While the call runs, the page shows **live captions** of both sides from LiveKit's `lk.transcription` stream, plus a mic-level bar and a connection checklist. The dashboard header has a **Talk to us** button that opens this page.
+
+**Verified headlessly (2026-10-10):** a script joined a real session as a participant and spoke a synthetic sentence. Vaani transcribed it word for word, the greeting used the name, and the agent replied about 2.7 s after the caller stopped speaking (same with Deepgram or AssemblyAI speech recognition).
+
 ### Cost rate cards (2026-10-10)
 
 | Vendor | Rate | Source |
