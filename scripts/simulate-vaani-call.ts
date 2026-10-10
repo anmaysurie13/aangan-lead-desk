@@ -44,9 +44,8 @@ async function send(payload: object) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   let url = `${base}/api/webhooks/vaani`;
   if (process.env.VAANI_WEBHOOK_SECRET) {
-    const ts = String(Math.floor(Date.now() / 1000));
-    headers["X-Vaani-Timestamp"] = ts;
-    headers["X-Vaani-Signature"] = "sha256=" + createHmac("sha256", process.env.VAANI_WEBHOOK_SECRET).update(`${ts}.${body}`).digest("hex");
+    // Same format Vaani really sends (observed 2026-10-10): sha256=HMAC-SHA256(secret, rawBody)
+    headers["x-webhook-signature"] = "sha256=" + createHmac("sha256", process.env.VAANI_WEBHOOK_SECRET).update(body).digest("hex");
   } else {
     url += `?token=${process.env.VAANI_WEBHOOK_TOKEN}`;
   }

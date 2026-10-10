@@ -173,11 +173,7 @@ The provider is **Vaani AI Research**. Docs are at [docs.vaanivoice.ai](https://
 - `GET /api/call-history` returns **500 "Invalid client_id format"** for this workspace. Enrichment from call history is best effort; failures go to `dead_letters`, source `vaani_enrich`. The caller number comes from `call_started.phone_number` or the "Send all call details" payload.
 - The agent list shows `published: false` while the agent status is `running`. This needs confirming with a real call.
 
-**Webhook auth, as it really behaves.** Vaani's agent-webhook "Test Connectivity" ping arrives **without** any signature headers, only `x-webhook-event`. So the endpoint works as follows:
-- A request **with** signature headers must carry a valid HMAC.
-- A request **without** them must carry `?token=VAANI_WEBHOOK_TOKEN`.
-
-Paste the full URL from the git-ignored `vaani-webhook-url.local.txt` into Vaani's webhook. `webhook_test` pings get a 200 and are logged.
+**Webhook auth, as it really behaves (confirmed 2026-10-10).** When a Secret is saved on the Vaani webhook, Vaani sends `x-webhook-signature: sha256=<hex HMAC-SHA256(secret, raw body)>` (no timestamp; replays are harmless because processing is idempotent). The endpoint accepts, in order: that signature (key `VAANI_WEBHOOK_SECRET`), the documented `X-Vaani-Signature`/`X-Vaani-Timestamp` pair, or `?token=VAANI_WEBHOOK_TOKEN`. A bad signature is never rescued by a token. Bodies can be one event or a batch (`{events:[...]}`). `webhook_test` pings get a 200 and are logged. **The secret in Vaani must match `VAANI_WEBHOOK_SECRET` in Vercel**; rotate both together.
 
 ### Calendly booking (Phase 4)
 
