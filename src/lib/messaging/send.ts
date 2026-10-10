@@ -67,3 +67,17 @@ export async function sendEmail(msg: {
 }
 
 export const isEmail = (s: string | null | undefined): s is string => !!s && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+
+/** For /health: verifies the SMTP login without sending anything. ok:null = not configured. */
+export async function smtpReady(): Promise<{ ok: boolean | null; detail: string }> {
+  const t = smtp();
+  if (!t) return { ok: null, detail: "SMTP_HOST / SMTP_USER / SMTP_PASS not set: no email can be sent" };
+  try {
+    await t.verify();
+    return { ok: true, detail: `SMTP login OK (${process.env.SMTP_USER})` };
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message.slice(0, 160) : String(e) };
+  }
+}
+
+export const emailConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);

@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db, schema } from "@/db/client";
-import { availableTimes, createSingleUseLink, tagBookingUrl } from "@/lib/calendly/client";
+import { availableTimes, createSingleUseLink, getMe, listInvitees, listScheduledEvents, tagBookingUrl } from "@/lib/calendly/client";
 import { isEmail, sendEmail } from "@/lib/messaging/send";
+import { signedLink } from "@/lib/auth";
 
 /**
  * Qualified lead → consultation booking (Phase 4).
@@ -40,7 +41,7 @@ export async function createBookingForEnquiry(enquiryId: string): Promise<{ stat
   await d.update(schema.enquiries).set({ assignedDesignerId: designer.id, updatedAt: new Date() }).where(eq(schema.enquiries.id, enquiryId));
 
   try {
-    const slots = (await availableTimes(designer.calendlyEventTypeUri, 14)).slice(0, 2).map((s) => s.start_time);
+    const slots = pickSlots((await availableTimes(designer.calendlyEventTypeUri, 14)).map((s) => s.start_time));
     const link = tagBookingUrl(await createSingleUseLink(designer.calendlyEventTypeUri), booking.id);
     await d
       .update(schema.bookings)
@@ -73,7 +74,7 @@ export async function createBookingForEnquiry(enquiryId: string): Promise<{ stat
       await sendEmail({
         to: designer.email,
         subject: `New ${enq.status === "QUALIFIED_WITH_NOTE" ? "lead (with note)" : "lead"}: ${enq.callerName ?? "caller"}, ${enq.locality ?? "locality unknown"}`,
-        text: designerBrief({ enq, phone, link, slots, linkEmailed: status === "link_sent", summary: qr?.summary3Lines, brief: qr?.briefForDesigner, openQuestions: (qr?.openQuestions as string[] | undefined) ?? [] }),
+        text: designerBrief({ enq, phone, link, slots, linkEmailed: status === "link_sent", claimUrl: signedLink("claim", { e: enquiryId, d: designer.id }), leadUrl: signedLink("lead", { e: enquiryId }), rateUrls: [1, 2, 3, 4, 5].map((n) => signedLink("rate", { e: enquiryId, r: String(n) })), summary: qr?.summary3Lines, brief: qr?.briefForDesigner, openQuestions: (qr?.openQuestions as string[] | undefined) ?? [] }),
         kind: "hot_lead",
         enquiryId,
         recipientDesignerId: designer.id,
@@ -95,7 +96,7 @@ export async function pickDesigner() {
     .select({ designer: schema.designers })
     .from(schema.designers)
     .where(and(eq(schema.designers.active, true), isNotNull(schema.designers.calendlyEventTypeUri)))
-    .orderBy(asc(sql`(select max(e.created_at) from enquiries e where e.assigned_designer_id = ${schema.designers.id}) nulls first`), asc(schema.designers.name));
+    .orderBy(sql`(select max(e.created_at) from enquiries e where e.assigned_designer_id = ${schema.designers.id}) asc nulls first`, asc(schema.designers.name));
   return rows[0]?.designer ?? null;
 }
 
@@ -135,6 +136,9 @@ export function designerBrief(b: {
   link: string;
   slots: string[];
   linkEmailed: boolean;
+  claimUrl?: string;
+  leadUrl?: string;
+  rateUrls?: string[];
   summary?: string;
   brief?: string;
   openQuestions: string[];
@@ -159,5 +163,53 @@ export function designerBrief(b: {
     b.linkEmailed ? "The link has been emailed to the caller." : "The caller has NOT received the link (no confirmed email). Please call them and share it.",
     "",
     `Full brief:\n${v(b.brief)}`,
+    ...(b.leadUrl ? ["", `Transcript and details: ${b.leadUrl}`] : []),
+    ...(b.claimUrl ? ["", `I'll take it (confirm you will call back): ${b.claimUrl}`] : []),
+    ...(b.rateUrls ? ["", `Was this brief useful? ${b.rateUrls.map((u, i) => `${i + 1}: ${u}`).join("   ")}`] : []),
   ].join("\n");
+}
+
+/** A booking was made through our link (webhook invitee.created, or found by polling). Idempotent. */
+export async function markBooked(bookingId: string, b: { eventUri: string | null; inviteeUri: string | null; start: Date | null; end: Date | null }) {
+  const d = db();
+  const [bk] = await d.select().from(schema.bookings).where(eq(schema.bookings.id, bookingId)).limit(1);
+  if (!bk || bk.status === "booked" || bk.status === "held") return false;
+  const now = new Date();
+  await d.update(schema.bookings).set({ status: "booked", calendlyEventUri: b.eventUri, calendlyInviteeUri: b.inviteeUri, slotStart: b.start, slotEnd: b.end, updatedAt: now }).where(eq(schema.bookings.id, bookingId));
+  await d.update(schema.enquiries).set({ status: "BOOKED", bookedAt: now, updatedAt: now }).where(eq(schema.enquiries.id, bk.enquiryId));
+  return true;
+}
+
+/**
+ * Fallback for plans without Calendly webhooks: ask Calendly for upcoming events and match their invitees'
+ * utm_content to our open bookings. Cheap (only runs while a link is outstanding).
+ */
+export async function pollCalendlyBookings(): Promise<{ checked: number; booked: number }> {
+  if (!process.env.CALENDLY_TOKEN) return { checked: 0, booked: 0 };
+  const d = db();
+  const open = await d.select().from(schema.bookings).where(inArray(schema.bookings.status, ["link_created", "link_sent"]));
+  if (!open.length) return { checked: 0, booked: 0 };
+  const me = await getMe();
+  const earliest = new Date(Math.min(...open.map((o) => o.createdAt.getTime())));
+  const events = await listScheduledEvents(me.uri, earliest);
+  const wanted = new Set(open.map((o) => o.id));
+  let booked = 0;
+  for (const ev of events.slice(0, 30)) {
+    for (const inv of await listInvitees(ev.uri)) {
+      const id = inv.tracking?.utm_content;
+      if (id && wanted.has(id) && inv.status === "active") {
+        if (await markBooked(id, { eventUri: ev.uri, inviteeUri: inv.uri, start: new Date(ev.start_time), end: new Date(ev.end_time) })) booked++;
+      }
+    }
+  }
+  return { checked: open.length, booked };
+}
+
+/** Two useful options: the earliest slot, plus the earliest slot on a different IST day (so choices aren't 30 minutes apart). */
+export function pickSlots(starts: string[]): string[] {
+  if (starts.length <= 1) return starts;
+  const day = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(iso));
+  const first = starts[0];
+  const other = starts.find((s) => day(s) !== day(first));
+  return other ? [first, other] : [first, starts[1]];
 }

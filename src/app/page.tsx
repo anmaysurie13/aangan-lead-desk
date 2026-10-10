@@ -1,4 +1,4 @@
-import { Card, Pill } from "@/components/ui";
+import { Card } from "@/components/ui";
 
 export default function Home() {
   return (
@@ -10,8 +10,8 @@ export default function Home() {
         </div>
         <p className="mt-4 text-lg">Inbound phone enquiry desk for Aangan Studio, Pune.</p>
         <div className="mt-4 flex flex-wrap gap-3">
-          <Pill status="active">Phase 0</Pill>
-          <a className="nb-btn" href="/design">View design system</a>
+          <a className="nb-btn" href="/dashboard">Open the dashboard</a>
+          <a className="nb-btn nb-btn-secondary" href="/design">Design system</a>
         </div>
       </Card>
     </main>

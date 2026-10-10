@@ -105,3 +105,17 @@ export function tagBookingUrl(bookingUrl: string, bookingId: string): string {
   u.searchParams.set("utm_content", bookingId);
   return u.toString();
 }
+
+export type ScheduledEvent = { uri: string; status: string; start_time: string; end_time: string; event_type: string };
+export type Invitee = { uri: string; status: string; email: string; tracking?: { utm_content?: string | null; utm_source?: string | null } };
+
+/** GET /scheduled_events (scheduled_events:read): active events starting from `minStart`, newest first. */
+export async function listScheduledEvents(userUri: string, minStart: Date): Promise<ScheduledEvent[]> {
+  const q = new URLSearchParams({ user: userUri, status: "active", min_start_time: minStart.toISOString(), sort: "start_time:desc", count: "100" });
+  return (await call<{ collection: ScheduledEvent[] }>("GET", `/scheduled_events?${q}`)).collection;
+}
+
+/** GET /scheduled_events/{uuid}/invitees: carries tracking.utm_content = our booking id. */
+export async function listInvitees(eventUri: string): Promise<Invitee[]> {
+  return (await call<{ collection: Invitee[] }>("GET", `${eventUri}/invitees`)).collection;
+}

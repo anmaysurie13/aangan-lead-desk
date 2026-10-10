@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { verifyCalendlySignature } from "@/lib/calendly/client";
+import { markBooked } from "@/lib/booking/booking";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,18 +56,7 @@ export async function POST(req: NextRequest) {
 
   const now = new Date();
   if (body.event === "invitee.created") {
-    await d
-      .update(schema.bookings)
-      .set({
-        status: "booked",
-        calendlyEventUri: ev.uri ?? null,
-        calendlyInviteeUri: p.uri ?? null,
-        slotStart: ev.start_time ? new Date(ev.start_time) : null,
-        slotEnd: ev.end_time ? new Date(ev.end_time) : null,
-        updatedAt: now,
-      })
-      .where(eq(schema.bookings.id, booking.id));
-    await d.update(schema.enquiries).set({ status: "BOOKED", bookedAt: now, updatedAt: now }).where(eq(schema.enquiries.id, booking.enquiryId));
+    await markBooked(booking.id, { eventUri: ev.uri ?? null, inviteeUri: p.uri ?? null, start: ev.start_time ? new Date(ev.start_time) : null, end: ev.end_time ? new Date(ev.end_time) : null });
   } else {
     await d.update(schema.bookings).set({ status: "cancelled", updatedAt: now }).where(eq(schema.bookings.id, booking.id));
     // Back to qualified so the owner sees it needs a new slot.

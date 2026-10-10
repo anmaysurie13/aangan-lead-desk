@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { sweepStuckCalls } from "@/lib/pipeline/sweep";
+import { runPeriodicTasks } from "@/lib/pipeline/periodic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,5 +11,5 @@ export async function GET(req: NextRequest) {
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  return NextResponse.json(await sweepStuckCalls(5));
+  return NextResponse.json(await runPeriodicTasks());
 }

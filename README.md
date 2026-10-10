@@ -203,7 +203,37 @@ npm run calendly -- --webhook      # signed subscription → /api/webhooks/calen
 
 Token scopes: `users:read event_types:read availability:read scheduling_links:write scheduled_events:read webhooks:read webhooks:write`.
 
-**Observed costs** (from the dashboard, 2026-10-09; not yet entered as rate cards):
+### Delivery by email only (decision 2026-10-09: no Telegram, no SMS/WhatsApp)
+
+| Who | What they get | Notes |
+|---|---|---|
+| **Caller** | Booking link + next 2 open slots (on two different days) | The voice agent asks for an email only once the caller qualifies, has them spell it, and reads it back letter by letter. The scorer saves it only if it was confirmed |
+| **Designer** | Brief (every field or "unknown"), the single-use link, a signed **"I'll take it"** link, 1–5 **rating** links, and a signed link to the transcript page | The claim link opens a confirm button; email scanners that pre-fetch links can't claim a lead |
+| **Nikhil** | URGENT escalations, PRICING BREACH alerts, unclaimed-lead escalations, no-webhook alert, 8pm digest | Needs `NIKHIL_EMAIL` |
+
+SMTP via nodemailer (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`), for example a Gmail app password. Until it's configured, every send is **recorded as `email_not_configured`** and nothing leaves the system.
+
+Calendly notifies us via webhook (`/api/webhooks/calendly`). A polling fallback (`pollCalendlyBookings`) also matches bookings to links by the tracking tag. It runs from the periodic task, in case webhooks aren't available on the free plan.
+
+### Dashboard (Phase 6)
+
+Sign in at `/login` with the shared password (`DASHBOARD_PASSWORD`; the session is an httpOnly cookie derived from it plus `AUTH_SECRET`).
+
+| Page | What it shows |
+|---|---|
+| `/dashboard` (**Leads**) | Photo hero, counts, tabs **Needs you / New / In progress / Booked / Not qualified / All**, search, filters, lead cards. Review items have Qualify/Decline buttons, and booked leads have "Mark held" (the manual funnel step) |
+| `/dashboard/insights` | Answered-under-5-min, after-hours, qualified, cost per lead; when people call (hour chart); before and now (48% baseline vs measured); the funnel; where enquiries went; why some weren't a fit; "the cut" (asked the price vs quoted); cost |
+| `/dashboard/monthly` | The "September-style" monthly table plus CSV |
+| `/lead?e=…` | Lead detail: criteria with the caller's own words, booking, timeline, full transcript. Open to the dashboard session or to a designer with the signed link in their email |
+| `/health` | Live checks: Neon, Gemini, Vaani + agent knowledge drift, last webhook, rejected webhooks, Calendly, SMTP, dead letters, stuck calls |
+
+Look: a "courtyard" theme (sage mist, deep teal, brass; Fraunces + Manrope; interior photography), inspired by the studio's own front-desk site and isolated to the `(desk)` route group. The neubrutalist system lives on at `/design`.
+
+**Periodic work** (`runPeriodicTasks`): sweeps stuck calls, polls Calendly, sends SLA re-alerts (designer at `sla_claim_minutes`, Nikhil at `sla_escalate_minutes`), sends the no-webhook alert, and sends the 8pm digest. It runs from two daily Vercel crons (04:30 and 14:30 UTC) **and after every Vaani webhook**, because Vercel's free plan only allows daily crons.
+
+**Demo rows.** `npm run seed:demo` adds 7 clearly fake enquiries (`sim-demo-*`) for design review. `npm run simulate -- --cleanup` removes them and all simulated calls.
+
+**Observed costs** (from the Vaani dashboard, 2026-10-09). The ₹5.60/min is now stored as `config.rate_card_vaani_per_minute_inr`, labelled as an estimate:
 - Agent: **₹5.60/min (est.)**. Billing is dynamic, "per minute, from active LLM + TTS + STT".
 - Wallet: ₹100 prepaid.
 - Phone numbers (Vobiz): ₹100 setup plus ₹500–999/month. Only Gujarat, Karnataka and "92 series" numbers were listed, with **no Maharashtra numbers**.

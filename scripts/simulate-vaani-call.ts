@@ -67,6 +67,11 @@ async function cleanup() {
   await q(`delete from notifications where call_id in ${sim}`);
   await q(`delete from webhook_receipts where external_id like 'sim-%'`);
   await q(`delete from dead_letters where external_id like 'sim-%'`);
+  if (enqIds.length) {
+    await q(`delete from bookings where enquiry_id in (${enqIds.join(",")})`);
+    await q(`delete from notifications where enquiry_id in (${enqIds.join(",")})`);
+    await q(`delete from qualification_results where enquiry_id in (${enqIds.join(",")})`);
+  }
   await q(`delete from calls where vaani_call_id like 'sim-%'`);
   if (enqIds.length) await q(`delete from enquiries where id in (${enqIds.join(",")})`);
   if (callerIds.length) await q(`delete from callers where id in (${callerIds.join(",")}) and not exists (select 1 from calls c where c.caller_id = callers.id)`);

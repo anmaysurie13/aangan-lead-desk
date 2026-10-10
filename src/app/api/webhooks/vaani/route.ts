@@ -4,7 +4,7 @@ import { db, schema } from "@/db/client";
 import { isInOfficeHours } from "@/lib/config";
 import { KNOWLEDGE_VERSION } from "@/lib/knowledge";
 import { normaliseVaaniTranscript, processCall } from "@/lib/pipeline/process-call";
-import { sweepStuckCalls } from "@/lib/pipeline/sweep";
+import { runPeriodicTasks } from "@/lib/pipeline/periodic";
 import { findCallInHistory } from "@/lib/vaani/client";
 import { eventCallId, isPostProcessing, VaaniEvent, verifyVaaniRequest } from "@/lib/vaani/webhook";
 
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       await enrichFromHistory(row.id, vaaniCallId);
       await processCall(row.id);
     }
-    await sweepStuckCalls(); // opportunistic safety net: retries any call stuck > 6 min
+    await runPeriodicTasks().catch(() => undefined); // sweep stuck calls, SLA re-alerts, silence alert, digest (idempotent)
   });
   return NextResponse.json({ status: "ok" });
 }

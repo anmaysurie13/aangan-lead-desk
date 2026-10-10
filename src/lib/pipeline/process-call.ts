@@ -142,8 +142,14 @@ export async function processCall(callRowId: string): Promise<{ status: string; 
 
     // ---- 4. costs ----
     await recordGeminiCost(call.id, result.usage);
+    await recordVaaniCost(call.id, call.durationSec);
 
-    await routeOutcome({ enquiryId, callId: call.id, verdict: v, pricingBreach: result.pricingBreach });
+    // A routing failure (booking/email) must never undo a successful verdict: record it and carry on.
+    try {
+      await routeOutcome({ enquiryId, callId: call.id, verdict: v, pricingBreach: result.pricingBreach });
+    } catch (e) {
+      await d.insert(schema.deadLetters).values({ source: "routing", externalId: call.vaaniCallId, payload: { enquiryId }, error: (e instanceof Error ? e.message : String(e)).slice(0, 2000) });
+    }
     return { status: "scored", enquiryId, outcome: v.outcome };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -242,3 +248,13 @@ export function normaliseVaaniTranscript(raw: string): string {
     .join("\n");
 }
 
+/** Vaani bills per minute. If Vaani didn't report call_cost, price the call from the rate card in config (never guessed). */
+async function recordVaaniCost(callId: string, durationSec: number | null) {
+  const d = db();
+  const rate = await getConfig<number | null>("rate_card_vaani_per_minute_inr", null);
+  if (rate === null || !durationSec) return;
+  const [already] = await d.select({ id: schema.costEvents.id }).from(schema.costEvents).where(and(eq(schema.costEvents.callId, callId), eq(schema.costEvents.vendor, "vaani"))).limit(1);
+  if (already) return;
+  const minutes = durationSec / 60;
+  await d.insert(schema.costEvents).values({ callId, vendor: "vaani", unit: "minute", qty: String(minutes), unitCostInr: String(rate), totalInr: String(minutes * rate) });
+}
