@@ -349,6 +349,18 @@ Customers talk to the agent from their browser at **`/talk`** (public, no login)
 
 **Verified headlessly (2026-10-10):** a script joined a real session as a participant and spoke a synthetic sentence. Vaani transcribed it word for word, the greeting used the name, and the agent replied about 2.7 s after the caller stopped speaking (same with Deepgram or AssemblyAI speech recognition).
 
+### HubSpot: the founder's view (decision 2026-10-10: HubSpot for the founder, dashboard for designers)
+
+HubSpot is fed by the same pipeline every Vaani call goes through (phone or browser), so it needs no separate Vaani connection (Vaani's own Integrations page only lists WhatsApp and Cal.com). `src/lib/hubspot/sync.ts` mirrors each enquiry, idempotently, after scoring and again on booking, claim, held and review:
+
+| HubSpot object | When | Content |
+|---|---|---|
+| **Contact** | Every enquiry (found by email, else phone, else created) | name, phone, email, city = locality, **lead status** (Open / In progress / Open deal / Unqualified / New) |
+| **Deal** (Sales Pipeline) | Qualified leads only | name "Priya · 3BHK · Kothrud", stage **Qualified To Buy**, then **Presentation Scheduled** once a consultation is booked, summary as description. **No amount is ever set** (we never quote) |
+| **Note** | First sync, then booking / claimed / held / reviewed | score, brief, the five criteria with the caller's own words, signed link to the transcript page |
+
+Auth is a HubSpot **service key** (`HUBSPOT_TOKEN`, scopes `crm.objects.contacts.read/write` and `crm.objects.deals.read/write`; HubSpot replaced private apps with service keys). The developer API key (`na2-…`) cannot access CRM data. HubSpot errors never affect scoring or booking: they are stored in `enquiries.hubspot_error` and `dead_letters`, and `/health` turns red. The lead page has **Open in HubSpot** buttons. `npm run simulate -- --cleanup` also archives test records in HubSpot.
+
 ### Cost rate cards (2026-10-10)
 
 | Vendor | Rate | Source |

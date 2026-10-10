@@ -58,6 +58,16 @@ async function cleanup() {
   const { sql } = await import("drizzle-orm");
   const d = db();
   const q = (s: string) => d.execute(sql.raw(s));
+  // Remove the mirrored HubSpot records of simulated leads too (archive = HubSpot recycle bin).
+  if (process.env.HUBSPOT_TOKEN) {
+    const { archiveObject } = await import("../src/lib/hubspot/client");
+    const hs = await q(`select distinct e.hubspot_contact_id as c, e.hubspot_deal_id as d from enquiries e join calls c on c.enquiry_id = e.id where c.vaani_call_id like 'sim-%'`);
+    for (const r of hs.rows as { c: string | null; d: string | null }[]) {
+      if (r.d) await archiveObject("deals", r.d).catch(() => undefined);
+      if (r.c) await archiveObject("contacts", r.c).catch(() => undefined);
+    }
+    console.log(`archived ${hs.rows.length} HubSpot test lead(s)`);
+  }
   const sim = "(select id from calls where vaani_call_id like 'sim-%')";
   const enqIds = (await q(`select distinct enquiry_id from calls where vaani_call_id like 'sim-%' and enquiry_id is not null`)).rows.map((r) => `'${r.enquiry_id}'`);
   const callerIds = (await q(`select distinct caller_id from calls where vaani_call_id like 'sim-%' and caller_id is not null`)).rows.map((r) => `'${r.caller_id}'`);

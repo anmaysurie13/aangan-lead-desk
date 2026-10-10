@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { verifySignedParams } from "@/lib/auth";
+import { syncEnquiryToHubspot } from "@/lib/hubspot/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,5 +38,6 @@ export async function POST(req: NextRequest) {
     .returning({ id: schema.enquiries.id });
   if (!won.length) return page("Already taken", "<p>Someone has already claimed this lead.</p>");
   await d.update(schema.notifications).set({ claimedAt: now, claimedByDesignerId: designerId }).where(and(eq(schema.notifications.enquiryId, enquiryId), eq(schema.notifications.kind, "hot_lead")));
+  await syncEnquiryToHubspot(enquiryId, "claimed");
   return page("It's yours", "<p>Claimed. Please call the customer back soon, and use the booking link in the brief.</p>");
 }

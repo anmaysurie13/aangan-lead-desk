@@ -4,6 +4,7 @@ import { getConfig } from "@/lib/config";
 import { createBookingForEnquiry } from "@/lib/booking/booking";
 import { sendEmail } from "@/lib/messaging/send";
 import { normalizePhone } from "@/lib/phone";
+import { syncEnquiryToHubspot } from "@/lib/hubspot/sync";
 import { scoreCall, ScorerError } from "@/lib/scorer/score";
 import { parseTranscript } from "@/lib/transcript";
 import type { Verdict } from "@/lib/scorer/schema";
@@ -161,6 +162,7 @@ export async function processCall(callRowId: string): Promise<{ status: string; 
     // A routing failure (booking/email) must never undo a successful verdict: record it and carry on.
     try {
       await routeOutcome({ enquiryId, callId: call.id, verdict: v, pricingBreach: result.pricingBreach });
+      await syncEnquiryToHubspot(enquiryId); // founder view; never throws
     } catch (e) {
       await d.insert(schema.deadLetters).values({ source: "routing", externalId: call.vaaniCallId, payload: { enquiryId }, error: (e instanceof Error ? e.message : String(e)).slice(0, 2000) });
     }

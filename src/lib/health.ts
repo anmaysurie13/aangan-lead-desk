@@ -5,6 +5,7 @@ import { KNOWLEDGE_VERSION } from "@/lib/knowledge";
 import { listAgents } from "@/lib/vaani/client";
 import { getMe } from "@/lib/calendly/client";
 import { emailReady } from "@/lib/messaging/send";
+import { hubspotConfigured } from "@/lib/hubspot/client";
 
 export type Check = { name: string; ok: boolean | null; detail: string };
 
@@ -67,6 +68,15 @@ export async function runHealthChecks(): Promise<Check[]> {
     out.push({ name: "Calendly", ok: !c.err, detail: c.err ?? `token OK for ${c.v!.name} (${c.ms} ms)` });
   }
 
+  if (!hubspotConfigured()) out.push({ name: "HubSpot (founder view)", ok: null, detail: "HUBSPOT_TOKEN not set" });
+  else {
+    const hs = await timed(async () => {
+      const r = await fetch("https://api.hubapi.com/crm/v3/objects/contacts?limit=1", { headers: { Authorization: `Bearer ${process.env.HUBSPOT_TOKEN}` }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    });
+    const unsynced = (await db().execute(sql`select count(*)::int as n from enquiries where hubspot_error is not null`)).rows[0] as { n: number };
+    out.push({ name: "HubSpot (founder view)", ok: !hs.err && unsynced.n === 0, detail: hs.err ?? (unsynced.n ? `${unsynced.n} enquiries failed to sync (see hubspot_error)` : `connected (${hs.ms} ms); every enquiry mirrors to a contact, qualified ones to a deal`) });
+  }
   const mail = await emailReady();
   out.push({ name: "Email (Resend)", ok: mail.ok, detail: mail.detail });
 

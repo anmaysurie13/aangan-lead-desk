@@ -137,7 +137,13 @@ export const enquiries = pgTable(
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }), // NEEDS_REVIEW resolved by human
     reviewedBy: text("reviewed_by"),
 
-    briefRating: integer("brief_rating"), // Check 04: 1-5 from Telegram
+    briefRating: integer("brief_rating"), // Check 04: 1-5 from the email rating links
+
+    // Founder view in HubSpot (contact + deal + notes). Synced after scoring and on booking/claim/held.
+    hubspotContactId: text("hubspot_contact_id"),
+    hubspotDealId: text("hubspot_deal_id"),
+    hubspotSyncedAt: timestamp("hubspot_synced_at", { withTimezone: true }),
+    hubspotError: text("hubspot_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

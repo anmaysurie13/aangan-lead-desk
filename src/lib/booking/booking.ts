@@ -3,6 +3,8 @@ import { db, schema } from "@/db/client";
 import { availableTimes, createSingleUseLink, getMe, listInvitees, listScheduledEvents, tagBookingUrl } from "@/lib/calendly/client";
 import { isEmail, sendEmail } from "@/lib/messaging/send";
 import { signedLink } from "@/lib/auth";
+import { formatIst } from "@/lib/time";
+import { syncEnquiryToHubspot } from "@/lib/hubspot/sync";
 
 /**
  * Qualified lead → consultation booking (Phase 4).
@@ -116,8 +118,7 @@ async function fail(bookingId: string, error: string) {
   await d.insert(schema.deadLetters).values({ source: "calendly", externalId: bookingId, error: error.slice(0, 2000) });
 }
 
-const IST = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-export const formatIst = (iso: string) => IST.format(new Date(iso));
+export { formatIst };
 
 /** Caller-facing text. No prices, ever (the guardrail would flag it). */
 export function schedulingMessage(m: { name: string | null; designer: string; slots: string[]; link: string }) {
@@ -177,6 +178,7 @@ export async function markBooked(bookingId: string, b: { eventUri: string | null
   const now = new Date();
   await d.update(schema.bookings).set({ status: "booked", calendlyEventUri: b.eventUri, calendlyInviteeUri: b.inviteeUri, slotStart: b.start, slotEnd: b.end, updatedAt: now }).where(eq(schema.bookings.id, bookingId));
   await d.update(schema.enquiries).set({ status: "BOOKED", bookedAt: now, updatedAt: now }).where(eq(schema.enquiries.id, bk.enquiryId));
+  await syncEnquiryToHubspot(bk.enquiryId, "booked");
   return true;
 }
 

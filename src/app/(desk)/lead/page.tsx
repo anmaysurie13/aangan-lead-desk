@@ -7,6 +7,7 @@ import { formatIst } from "@/lib/booking/booking";
 import { parseTranscript } from "@/lib/transcript";
 import { PHOTOS } from "@/lib/photos";
 import { DeskFrame, Tag } from "@/components/desk";
+import { recordUrl } from "@/lib/hubspot/client";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export default async function Lead({ searchParams }: { searchParams: Promise<Rec
         extra: <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}><Tag tone={qr?.outcome === "ESCALATED" ? "clay" : qr?.outcome === "DECLINED" ? undefined : "sage"}>{(qr?.outcome ?? e.status).replaceAll("_", " ").toLowerCase()}</Tag>{qr && <Tag tone="teal">score {qr.score}</Tag>}{qr?.frustrationFlag && <Tag tone="clay">frustrated caller</Tag>}</div>,
       }}
     >
-      <p style={{ marginBottom: 18 }}><Link className="d-pill" href="/dashboard">← All leads</Link></p>
+      <p style={{ marginBottom: 18, display: "flex", gap: 10, flexWrap: "wrap" }}><Link className="d-pill" href="/dashboard">← All leads</Link>{e.hubspotContactId && <a className="d-pill" href={recordUrl("contact", e.hubspotContactId)} target="_blank" rel="noreferrer">Open in HubSpot ↗</a>}{e.hubspotDealId && <a className="d-pill" href={recordUrl("deal", e.hubspotDealId)} target="_blank" rel="noreferrer">HubSpot deal ↗</a>}</p>
 
       <div className="d-grid cols-2">
         <section className="d-card">
