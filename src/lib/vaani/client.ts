@@ -84,13 +84,15 @@ export type WebrtcSession = { token: string; room_name: string; connection_url: 
  * POST /api/trigger-call/ with medium "webrtc" (docs.vaanivoice.ai/api-reference/trigger-call): returns a LiveKit
  * token + connection_url that the browser joins with livekit-client. Language: primary + English fallback.
  */
-export async function startWebrtcSession(opts: { agentId: string; language: "en" | "hi"; welcomeMessage?: string }) {
+export async function startWebrtcSession(opts: { agentId: string; language: "en" | "hi"; welcomeMessage?: string; modifyAgent?: Record<string, unknown> }) {
   return call<WebrtcSession>("POST", "/api/trigger-call/", {
     agent_id: opts.agentId,
     medium: "webrtc",
     primary_language: opts.language,
     secondary_language: "en",
     ...(opts.welcomeMessage ? { welcome_message: opts.welcomeMessage } : {}),
+    // Documented per-call override, deep-merged with the saved agent (docs.vaanivoice.ai/api-reference/trigger-call).
+    ...(opts.modifyAgent ? { modify_agent: opts.modifyAgent } : {}),
   });
 }
 

@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { startWebrtcSession } from "@/lib/vaani/client";
-import { cleanName, greeting } from "@/lib/talk";
+import { callerOverride, cleanName, greeting } from "@/lib/talk";
+import { buildAgentSystemPrompt, knowledge } from "@/lib/knowledge";
+import { getConfig } from "@/lib/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +40,9 @@ export async function POST(req: NextRequest) {
   if (all.n >= GLOBAL_PER_HOUR) return NextResponse.json({ error: "We are very busy right now. Please try again shortly." }, { status: 429 });
 
   try {
-    const s = await startWebrtcSession({ agentId, language, welcomeMessage: greeting(name, language) });
+    const minWeeksRunway = await getConfig("min_weeks_runway", 8);
+    const base = buildAgentSystemPrompt(knowledge, { minWeeksRunway, languages: ["English", "Hindi"] });
+    const s = await startWebrtcSession({ agentId, language, welcomeMessage: greeting(name, language), modifyAgent: callerOverride(base, name, language) });
     await d.insert(schema.webSessions).values({ roomName: s.room_name, ipHash, language });
     return NextResponse.json({ token: s.token, connectionUrl: s.connection_url, roomName: s.room_name });
   } catch (e) {

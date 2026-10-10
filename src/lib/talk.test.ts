@@ -21,3 +21,16 @@ describe("talk helpers", () => {
     expect(scanAgentTurnsForPricing([{ speaker: "agent", text: greeting("Priya", "en") }])).toEqual([]);
   });
 });
+
+import { callerOverride } from "./talk";
+describe("callerOverride", () => {
+  it("adds the name to the prompt and the greeting", () => {
+    const o = callerOverride("BASE PROMPT", "Priya", "en");
+    expect(o.persona.identity.system_prompt).toContain("BASE PROMPT");
+    expect(o.persona.identity.system_prompt).toContain("caller's name is Priya");
+    expect(o.persona.identity.greeting_message.agent_message).toContain("Namaste Priya");
+  });
+  it("asks for the name only when none was given", () => {
+    expect(callerOverride("B", "", "en").persona.identity.system_prompt).toContain("ask for it politely");
+  });
+});
