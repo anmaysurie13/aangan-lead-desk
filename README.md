@@ -227,7 +227,7 @@ Calendly notifies us via webhook (`/api/webhooks/calendly`). A polling fallback 
 | `/lead?e=…` | Lead detail: criteria with the caller's own words, booking, timeline, full transcript. Open to the dashboard session or to a designer with the signed link in their email |
 | `/health` | Live checks: Neon, Gemini, Vaani + agent knowledge drift, last webhook, rejected webhooks, Calendly, SMTP, dead letters, stuck calls |
 
-Look: a "courtyard" theme (sage mist, deep teal, brass; Fraunces + Manrope; interior photography), inspired by the studio's own front-desk site and isolated to the `(desk)` route group. The neubrutalist system lives on at `/design`.
+Look: a "courtyard" theme (sage mist, deep teal, brass; Fraunces + Manrope; interior photography), inspired by the studio's own front-desk site and isolated to the `(desk)` route group.
 
 **Periodic work** (`runPeriodicTasks`): sweeps stuck calls, polls Calendly, sends SLA re-alerts (designer at `sla_claim_minutes`, Nikhil at `sla_escalate_minutes`), sends the no-webhook alert, and sends the 8pm digest. It runs from two daily Vercel crons (04:30 and 14:30 UTC) **and after every Vaani webhook**, because Vercel's free plan only allows daily crons.
 
