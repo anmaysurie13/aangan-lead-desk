@@ -24,6 +24,8 @@ export default function TalkClient() {
   const [heardYou, setHeardYou] = useState(false);
   const [needsSound, setNeedsSound] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const [captions, setCaptions] = useState<{ id: string; who: "You" | "Aangan"; text: string }[]>([]);
   const room = useRef<Room | null>(null);
   const audioBox = useRef<HTMLDivElement>(null);
   const raf = useRef<number | null>(null);
@@ -66,7 +68,13 @@ export default function TalkClient() {
   }
 
   async function start() {
+    if (!name.trim()) {
+      setError(lang === "hi" ? "कृपया अपना नाम लिखें।" : "Please enter your name first.");
+      setPhase("error");
+      return;
+    }
     setError("");
+    setCaptions([]);
     setPhase("connecting");
     setSeconds(0);
     setLog([]);
@@ -81,13 +89,25 @@ export default function TalkClient() {
       probe.getTracks().forEach((t) => t.stop());
       note("microphone permission OK");
 
-      const res = await fetch("/api/talk/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: lang }) });
+      const res = await fetch("/api/talk/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: lang, name: name.trim() }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not start the call.");
       note("session created");
 
       const r = new Room({ adaptiveStream: true, dynacast: true });
       room.current = r;
+      // Live captions: the agent publishes its own and the caller's transcription on the lk.transcription text stream.
+      r.registerTextStreamHandler("lk.transcription", async (reader) => {
+        const attrs = reader.info.attributes ?? {};
+        const who: "You" | "Aangan" = attrs["lk.transcribed_track_id"] ? "You" : "Aangan";
+        const id = attrs["lk.segment_id"] ?? reader.info.id;
+        let text = "";
+        for await (const chunk of reader) {
+          text += chunk;
+          setCaptions((cs) => [...cs.filter((x) => x.id !== id), { id, who, text }].slice(-8));
+        }
+        if (who === "You") setHeardYou(true);
+      });
       r.on(RoomEvent.ConnectionStateChanged, (s: ConnectionState) => note(`connection: ${s}`));
       r.on(RoomEvent.ParticipantConnected, (p) => {
         setAgentJoined(true);
@@ -153,6 +173,17 @@ export default function TalkClient() {
         <>
           <h2 style={{ marginBottom: 8 }}>Talk to our front desk</h2>
           <p className="d-note" style={{ marginBottom: 18 }}>Speak to our assistant right from your browser. It answers at any hour, in English or Hindi. This call is recorded so a designer can follow up. Please use headphones if you can, and allow the microphone when asked.</p>
+          <input
+            className="d-input"
+            style={{ marginBottom: 14, textAlign: "center" }}
+            placeholder={lang === "hi" ? "आपका नाम" : "Your name"}
+            aria-label="Your name"
+            autoComplete="given-name"
+            maxLength={40}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void start()}
+          />
           <div className="d-chips" style={{ justifyContent: "center", marginBottom: 18 }}>
             <button className="d-pill" aria-current={lang === "en"} onClick={() => setLang("en")} type="button">English</button>
             <button className="d-pill" aria-current={lang === "hi"} onClick={() => setLang("hi")} type="button">हिन्दी</button>
@@ -175,6 +206,15 @@ export default function TalkClient() {
           <p className="d-note" style={{ marginBottom: 12 }}>
             {tick(agentJoined)} assistant joined · {tick(agentAudio)} hearing the assistant · {tick(micPublished)} microphone sent · {tick(heardYou)} your voice detected
           </p>
+          <div style={{ textAlign: "left", display: "grid", gap: 8, margin: "0 0 14px", maxHeight: 220, overflow: "auto" }} aria-live="polite">
+            {captions.length === 0 && <p className="d-note" style={{ textAlign: "center" }}>The conversation will appear here as you talk.</p>}
+            {captions.map((c) => (
+              <div key={c.id} className={`d-turn ${c.who === "You" ? "caller" : "agent"}`} style={{ maxWidth: "92%" }}>
+                <small>{c.who === "You" ? (name || "YOU").toUpperCase() : "AANGAN"}</small>
+                {c.text}
+              </div>
+            ))}
+          </div>
           {needsSound && <button className="d-btn brass" style={{ marginBottom: 12 }} onClick={() => room.current?.startAudio().then(() => setNeedsSound(false))} type="button">Enable sound</button>}
           {micPublished && !heardYou && seconds > 6 && <p className="d-alert" style={{ marginBottom: 12 }}>We can&apos;t hear any sound from your microphone. Check it isn&apos;t muted and that the right microphone is selected in your browser.</p>}
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>

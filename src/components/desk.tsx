@@ -33,6 +33,7 @@ export function DeskFrame({
           </div>
           <div className="d-actions">
             {actions}
+            <Link className="d-btn" href="/talk">Talk to us</Link>
             {authEnabled() && (
               <form action="/api/logout" method="post">
                 <button className="d-pill" type="submit">Sign out</button>

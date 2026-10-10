@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { startWebrtcSession } from "@/lib/vaani/client";
+import { cleanName, greeting } from "@/lib/talk";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +18,11 @@ export async function POST(req: NextRequest) {
   if (!agentId || !process.env.VAANI_API_KEY) return NextResponse.json({ error: "Voice calls are not available right now." }, { status: 503 });
 
   let language: "en" | "hi" = "en";
+  let name = "";
   try {
-    const body = (await req.json()) as { language?: string };
+    const body = (await req.json()) as { language?: string; name?: string };
     if (body.language === "hi") language = "hi";
+    name = cleanName(body.name); // spoken aloud and kept in the transcript
   } catch {
     /* default */
   }
@@ -35,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (all.n >= GLOBAL_PER_HOUR) return NextResponse.json({ error: "We are very busy right now. Please try again shortly." }, { status: 429 });
 
   try {
-    const s = await startWebrtcSession({ agentId, language });
+    const s = await startWebrtcSession({ agentId, language, welcomeMessage: greeting(name, language) });
     await d.insert(schema.webSessions).values({ roomName: s.room_name, ipHash, language });
     return NextResponse.json({ token: s.token, connectionUrl: s.connection_url, roomName: s.room_name });
   } catch (e) {
