@@ -8,7 +8,6 @@ const TABS: { key: TabKey; href: string; label: string }[] = [
   { key: "leads", href: "/dashboard", label: "Leads" },
   { key: "insights", href: "/dashboard/insights", label: "Insights" },
   { key: "monthly", href: "/dashboard/monthly", label: "Monthly" },
-  { key: "health", href: "/health", label: "Health" },
 ];
 
 /** Page frame: wordmark, tabs, photo hero. The hero is rendered by the page via `hero` so each tab has its own photo. */

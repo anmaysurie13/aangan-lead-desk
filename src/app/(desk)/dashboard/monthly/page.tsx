@@ -52,7 +52,6 @@ export default async function Monthly({ searchParams }: { searchParams: Promise<
             {row("Cost per booking", s.perBooking === null ? "–" : inr(s.perBooking))}
           </tbody>
         </table>
-        {s.costs.missingRates.length > 0 && <p className="d-alert" style={{ marginTop: 16 }}>Rates still needed (costs understated): {s.costs.missingRates.join("; ")}.</p>}
       </div>
     </DeskFrame>
   );
