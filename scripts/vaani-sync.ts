@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseKnowledge } from "../src/lib/knowledge/parse";
 import { AGENT_GREETING, buildAgentSystemPrompt } from "../src/lib/knowledge/prompts";
-import { createAgent, listAgents, updateExperience, updatePersona } from "../src/lib/vaani/client";
+import { createAgent, listAgents, updatePersona } from "../src/lib/vaani/client";
 
 const AGENT_NAME = "aangan-front-desk";
 const args = process.argv.slice(2);
@@ -57,8 +57,8 @@ async function main() {
   }
 
   await updatePersona(agentId, persona);
-  // Cap every call (browser calls cost money per minute and the endpoint is public). Minutes, 1-60.
-  await updateExperience(agentId, { settings: { call_settings: { max_call_duration: 10, max_duration_enabled: true } } });
+  // NOTE: the 10-minute call cap (experience.settings.call_settings.max_call_duration=10, enabled) was set once on 2026-10-10.
+  // PATCHing the experience section resets the agent language/voice to English defaults, so the sync must not send it.
   console.log(`Pushed knowledge ${kb.version} to Vaani agent ${agentId} (runway ${minWeeksRunway} wk, languages en+hi)`);
 
   if (process.env.DATABASE_URL) {
