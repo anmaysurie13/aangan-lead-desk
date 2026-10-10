@@ -44,7 +44,12 @@ export async function POST(req: NextRequest) {
     await d.insert(schema.deadLetters).values({
       source: "vaani_auth",
       externalId: vaaniCallId,
-      payload: { headerNames: [...req.headers.keys()], event: event?.event ?? null },
+      payload: {
+        headerNames: [...req.headers.keys()],
+        event: event?.event ?? null,
+        // Signature debugging (2026-10-10): only for non-call events, so no transcripts are ever stored here.
+        ...(event?.event === "webhook_test" ? { xWebhook: Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-webhook"))), body: rawBody.slice(0, 500) } : {}),
+      },
       error: auth.reason,
     });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
