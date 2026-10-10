@@ -217,7 +217,7 @@ Calendly notifies us via webhook (`/api/webhooks/calendly`). A polling fallback 
 
 ### Dashboard (Phase 6)
 
-Sign in at `/login` with the shared password (`DASHBOARD_PASSWORD`; the session is an httpOnly cookie derived from it plus `AUTH_SECRET`).
+**The dashboard is open (no login)**, by Nikhil's choice on 2026-10-10. Anyone with the URL can see leads and transcripts and use the Qualify/Decline/Mark-held buttons, so keep the link private. To turn the login back on, set `DASHBOARD_PASSWORD` in Vercel (the session is an httpOnly cookie derived from it plus `AUTH_SECRET`) and redeploy. Designer email links (claim, rate, transcript) stay signed either way.
 
 | Page | What it shows |
 |---|---|

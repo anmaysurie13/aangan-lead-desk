@@ -34,7 +34,11 @@ export function newSessionToken(): string {
   return v;
 }
 
+/** The dashboard is open when no DASHBOARD_PASSWORD is set (Nikhil's choice, 2026-10-10). Set one to turn the login back on. */
+export const authEnabled = () => Boolean(process.env.DASHBOARD_PASSWORD);
+
 export async function isAuthed(): Promise<boolean> {
+  if (!authEnabled()) return true;
   const v = sessionValue();
   const c = (await cookies()).get(SESSION_COOKIE)?.value;
   return Boolean(v && c && safeEq(c, v));

@@ -1,8 +1,11 @@
+import { redirect } from "next/navigation";
+import { authEnabled } from "@/lib/auth";
 import { PHOTOS } from "@/lib/photos";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
+  if (!authEnabled()) redirect("/dashboard");
   const { error, next } = await searchParams;
   return (
     <div className="d-hero" style={{ backgroundImage: `url(${PHOTOS.login})`, minHeight: "100vh" }}>

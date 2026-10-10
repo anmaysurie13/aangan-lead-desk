@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { PHOTO_CREDIT } from "@/lib/photos";
+import { authEnabled } from "@/lib/auth";
 
 export type TabKey = "leads" | "insights" | "monthly" | "health";
 const TABS: { key: TabKey; href: string; label: string }[] = [
@@ -32,9 +33,11 @@ export function DeskFrame({
           </div>
           <div className="d-actions">
             {actions}
-            <form action="/api/logout" method="post">
-              <button className="d-pill" type="submit">Sign out</button>
-            </form>
+            {authEnabled() && (
+              <form action="/api/logout" method="post">
+                <button className="d-pill" type="submit">Sign out</button>
+              </form>
+            )}
           </div>
         </div>
         <nav className="d-tabs" aria-label="Sections">
