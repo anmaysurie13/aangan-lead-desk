@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         headerNames: [...req.headers.keys()],
         event: event?.event ?? null,
         // Signature debugging (2026-10-10): only for non-call events, so no transcripts are ever stored here.
-        ...(event?.event === "webhook_test" ? { xWebhook: Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-webhook"))), body: rawBody.slice(0, 500) } : {}),
+        ...(event?.event === "webhook_test" ? { xWebhook: Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-webhook"))), body: rawBody.slice(0, 6000) } : {}),
       },
       error: auth.reason,
     });
